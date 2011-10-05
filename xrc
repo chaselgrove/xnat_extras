@@ -1,0 +1,155 @@
+#!/usr/bin/python
+
+# Copyright 2011 Christian Haselgrove
+# Licensed under the BSD License: http://www.opensource.org/licenses/bsd-license.php
+
+import sys
+import os
+import getopt
+import getpass
+import base64
+import urlparse
+import httplib
+
+def report_error(msg):
+	sys.stderr.write('%s: %s\n' % (progname, msg))
+	sys.stderr.write('run %s with no arguments for usage\n' % progname)
+	return
+
+def debug(msg):
+	if debug_flag:
+		print msg
+	return
+
+progname = os.path.basename(sys.argv[0])
+
+try:
+	host = os.environ['XRC_HOST']
+except KeyError:
+	host = None
+
+try:
+	user_name = os.environ['XRC_USER']
+except KeyError:
+	user_name = None
+
+try:
+	password = os.environ['XRC_PASSWORD']
+except KeyError:
+	password = None
+
+if len(sys.argv) == 1:
+	print
+	print 'usage: %s [options] <method> <request>' % progname
+	print
+	print 'call an XNAT REST service'
+	print
+	print 'options are:'
+	print
+	print '    -d -- debug'
+	print '    -h <host>'
+	print '    -u <user name>'
+	print '    -p <password>'
+	print
+	print 'option values may be given by environment variables:'
+	print
+	if host is None:
+		print '    host: XRC_HOST'
+	else:
+		print '    host: XRC_HOST (set to %s)' % host
+	if user_name is None:
+		print '    user name: XRC_USER'
+	else:
+		print '    user name: XRC_USER (set to %s)' % user_name
+	if password is None:
+		print '    password: XRC_PASSWORD'
+	else:
+		print '    password: XRC_PASSWORD (currently set)'
+	print
+	print '%s will prompt for a missing user name, password, or host' % progname
+	print
+	print 'method must be GET, PUT, POST, or DELETE'
+	print
+	print 'cheat sheet (see also http://docs.xnat.org/XNAT+REST+API):'
+	print
+	print '    /data/JSESSION'
+	print
+	sys.exit(1)
+
+try:
+	(opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:d')
+except getopt.error, data:
+	report_error(data)
+	sys.exit(1)
+
+if len(args) < 2:
+	report_error('not enough non-option arguments')
+	sys.exit(1)
+
+if len(args) > 2:
+	report_error('not enough non-option arguments')
+	sys.exit(1)
+
+(method, request) = args
+
+if method not in ('GET', 'PUT', 'POST', 'DELETE'):
+	report_error('unknown method "%s"' % method)
+	sys.exit(1)
+
+if not request.startswith('/'):
+	report_error('request must start with "/"')
+	sys.exit(1)
+
+debug_flag = False
+
+for (option, value) in opts:
+	if option == '-h':
+		host = value
+	if option == '-u':
+		user_name = value
+	if option == '-p':
+		password = value
+	if option == '-d':
+		debug_flag = True
+
+if host is None:
+	sys.stdout.write('Host: ')
+	sys.stdout.flush()
+	host = sys.stdin.readline().strip()
+
+if user_name is None:
+	sys.stdout.write('User name: ')
+	sys.stdout.flush()
+	user_name = sys.stdin.readline().strip()
+
+if password is None:
+	password = getpass.getpass()
+
+host = host.rstrip('/')
+
+auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
+
+url_parts = urlparse.urlsplit(host)
+
+hc = httplib.HTTPConnection(url_parts.netloc)
+try:
+	path = '%s%s' % (url_parts.path, request)
+	debug('method: %s' % method)
+	debug('path: %s' % path)
+	debug('authorization: %s' % auth)
+	hc.request(method, path, headers={'Authorization': auth})
+	response = hc.getresponse()
+	data = response.read()
+finally:
+	hc.close()
+
+for (name, value) in response.getheaders():
+	print '%s: %s' % (name, value)
+
+print
+
+print data
+
+sys.exit(0)
+
+# eof
