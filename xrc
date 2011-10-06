@@ -24,17 +24,17 @@ def debug(msg):
 progname = os.path.basename(sys.argv[0])
 
 try:
-	host = os.environ['XRC_HOST']
+	host = os.environ['XNAT_HOST']
 except KeyError:
 	host = None
 
 try:
-	user_name = os.environ['XRC_USER']
+	user_name = os.environ['XNAT_USER']
 except KeyError:
 	user_name = None
 
 try:
-	password = os.environ['XRC_PASSWORD']
+	password = os.environ['XNAT_PASSWORD']
 except KeyError:
 	password = None
 
@@ -50,21 +50,22 @@ if len(sys.argv) == 1:
 	print '    -h <host>'
 	print '    -u <user name>'
 	print '    -p <password>'
+	print '    -d <request body file> (or "-" for stdin)'
 	print
 	print 'option values may be given by environment variables:'
 	print
 	if host is None:
-		print '    host: XRC_HOST'
+		print '    host: XNAT_HOST'
 	else:
-		print '    host: XRC_HOST (set to %s)' % host
+		print '    host: XNAT_HOST (set to %s)' % host
 	if user_name is None:
-		print '    user name: XRC_USER'
+		print '    user name: XNAT_USER'
 	else:
-		print '    user name: XRC_USER (set to %s)' % user_name
+		print '    user name: XNAT_USER (set to %s)' % user_name
 	if password is None:
-		print '    password: XRC_PASSWORD'
+		print '    password: XNAT_PASSWORD'
 	else:
-		print '    password: XRC_PASSWORD (currently set)'
+		print '    password: XNAT_PASSWORD (currently set)'
 	print
 	print '%s will prompt for a missing user name, password, or host' % progname
 	print
@@ -77,7 +78,7 @@ if len(sys.argv) == 1:
 	sys.exit(1)
 
 try:
-	(opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:d')
+	(opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:db:')
 except getopt.error, data:
 	report_error(data)
 	sys.exit(1)
@@ -87,7 +88,7 @@ if len(args) < 2:
 	sys.exit(1)
 
 if len(args) > 2:
-	report_error('not enough non-option arguments')
+	report_error('too many non-option arguments')
 	sys.exit(1)
 
 (method, request) = args
@@ -101,6 +102,7 @@ if not request.startswith('/'):
 	sys.exit(1)
 
 debug_flag = False
+body_fname = None
 
 for (option, value) in opts:
 	if option == '-h':
@@ -111,6 +113,8 @@ for (option, value) in opts:
 		password = value
 	if option == '-d':
 		debug_flag = True
+	if option == '-b':
+		body_fname = value
 
 if host is None:
 	sys.stdout.write('Host: ')
@@ -125,6 +129,17 @@ if user_name is None:
 if password is None:
 	password = getpass.getpass()
 
+if body_fname is None:
+	body = None
+elif body_fname == '-':
+	body = sys.stdin.read()
+else:
+	try:
+		body = open(body_fname).read()
+	except IOError, data:
+		sys.stderr.write('%s: %s\n' % (progname, data))
+		sys.exit(1)
+
 host = host.rstrip('/')
 
 auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
@@ -137,12 +152,16 @@ try:
 	debug('method: %s' % method)
 	debug('path: %s' % path)
 	debug('authorization: %s' % auth)
-	hc.request(method, path, headers={'Authorization': auth})
+	if body:
+		hc.request(method, path, body=body, headers={'Authorization': auth})
+	else:
+		hc.request(method, path, headers={'Authorization': auth})
 	response = hc.getresponse()
 	data = response.read()
 finally:
 	hc.close()
 
+print response.status, response.reason
 for (name, value) in response.getheaders():
 	print '%s: %s' % (name, value)
 
