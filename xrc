@@ -50,7 +50,7 @@ if len(sys.argv) == 1:
 	print '    -h <host>'
 	print '    -u <user name>'
 	print '    -p <password>'
-	print '    -d <request body file> (or "-" for stdin)'
+	print '    -b <request body file> (or "-" for stdin)'
 	print
 	print 'option values may be given by environment variables:'
 	print
