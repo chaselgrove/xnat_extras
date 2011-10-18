@@ -139,6 +139,7 @@ else:
 host = host.rstrip('/')
 url_parts = urlparse.urlsplit(host)
 
+headers = {}
 if auth_flag:
     if user_name is None:
         sys.stdout.write('User name: ')
@@ -147,22 +148,23 @@ if auth_flag:
     if password is None:
         password = getpass.getpass()
     auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
-    headers = {'Authorization': auth}
+    headers['Authorization'] = auth
 else:
     hc = httplib.HTTPConnection(url_parts.netloc)
-    hc.request('GET', url_parts.path)
+    hc.request('GET', url_parts.path + '/')
     response = hc.getresponse()
-    print response.read()
+    set_cookie = response.getheader('Set-Cookie')
+    if set_cookie:
+        headers['Cookie'] = set_cookie.split(';')[0]
     hc.close()
-
-print headers
 
 hc = httplib.HTTPConnection(url_parts.netloc)
 try:
     path = '%s%s' % (url_parts.path, request)
     debug('method: %s' % method)
     debug('path: %s' % path)
-    debug('authorization: %s' % auth)
+    for name in sorted(headers):
+        debug('header: %s: %s' % (name, headers[name]))
     if body:
         hc.request(method, path, body=body, headers=headers)
     else:
