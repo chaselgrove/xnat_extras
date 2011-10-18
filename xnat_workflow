@@ -62,304 +62,304 @@ class XNATSoapCaller:
         return result
 
 def report_error(msg):
-	sys.stderr.write('%s: %s\n' % (progname, msg))
-	sys.stderr.write('run %s with no arguments for usage\n' % progname)
-	return
+    sys.stderr.write('%s: %s\n' % (progname, msg))
+    sys.stderr.write('run %s with no arguments for usage\n' % progname)
+    return
 
 def node_text(node):
-	s = ''
-	for cn in node.childNodes:
-		if cn.nodeType == cn.TEXT_NODE:
-			s += cn.data
-	return s
+    s = ''
+    for cn in node.childNodes:
+        if cn.nodeType == cn.TEXT_NODE:
+            s += cn.data
+    return s
 
 def print_pairs(pairs):
-	if not pairs:
-		return
-	max_name_length = max([ len(name) for (name, value) in pairs ])
-	fmt = '%%-%ds %%s' % max_name_length
-	for pair in pairs:
-		print fmt % pair
-			
+    if not pairs:
+        return
+    max_name_length = max([ len(name) for (name, value) in pairs ])
+    fmt = '%%-%ds %%s' % max_name_length
+    for pair in pairs:
+        print fmt % pair
+            
 def get_workflow_xml(xsc, experiment_id, w_id):
-	args = (('ns1:string', xsc.session), 
-        	('ns1:string', 'wrk:workflowData.ID'), 
-        	('ns1:string', '='), 
-        	('ns1:string', experiment_id), 
-        	('ns1:string', 'wrk:workflowData'))
-	w_ids = [ int(v) for v in xsc.call('GetIdentifiers.jws', 'search', args) ]
-	if w_id not in w_ids:
-		sys.stderr.write("%s: can't find ID %d for %s (maybe try '%s list %s')\n" % (progname, w_id, experiment_id, progname, experiment_id))
-		sys.exit(1)
-	url = '%s/app/template/XMLSearch.vm/id/%s/data_type/wrk:workflowData' % (host, str(w_id))
-	r = urllib2.Request(url)
-	xsc.cookiejar.add_cookie_header(r)
-	return urllib2.urlopen(r).read()
+    args = (('ns1:string', xsc.session), 
+            ('ns1:string', 'wrk:workflowData.ID'), 
+            ('ns1:string', '='), 
+            ('ns1:string', experiment_id), 
+            ('ns1:string', 'wrk:workflowData'))
+    w_ids = [ int(v) for v in xsc.call('GetIdentifiers.jws', 'search', args) ]
+    if w_id not in w_ids:
+        sys.stderr.write("%s: can't find ID %d for %s (maybe try '%s list %s')\n" % (progname, w_id, experiment_id, progname, experiment_id))
+        sys.exit(1)
+    url = '%s/app/template/XMLSearch.vm/id/%s/data_type/wrk:workflowData' % (host, str(w_id))
+    r = urllib2.Request(url)
+    xsc.cookiejar.add_cookie_header(r)
+    return urllib2.urlopen(r).read()
 
 def update(xsc, doc):
-	inputs = (('ns0:string', xsc.session), 
-	          ('ns0:string', doc.toxml()), 
-	          ('ns0:boolean', False), 
-	          ('ns0:boolean', True))
-	xsc.call('StoreXML.jws', 'store', inputs, fix_import=True)
-	return
+    inputs = (('ns0:string', xsc.session), 
+              ('ns0:string', doc.toxml()), 
+              ('ns0:boolean', False), 
+              ('ns0:boolean', True))
+    xsc.call('StoreXML.jws', 'store', inputs, fix_import=True)
+    return
 
 progname = os.path.basename(sys.argv[0])
 
 try:
-	host = os.environ['XNAT_HOST']
+    host = os.environ['XNAT_HOST']
 except KeyError:
-	host = None
+    host = None
 
 try:
-	user_name = os.environ['XNAT_USER']
+    user_name = os.environ['XNAT_USER']
 except KeyError:
-	user_name = None
+    user_name = None
 
 try:
-	password = os.environ['XNAT_PASSWORD']
+    password = os.environ['XNAT_PASSWORD']
 except KeyError:
-	password = None
+    password = None
 
 if len(sys.argv) == 1:
-	print
-	print 'usage: %s [options] <command> [command arguments]' % progname
-	print
-	print 'XNAT workflow tool'
-	print
-	print 'options are:'
-	print
-	print '    -h <host>'
-	print '    -u <user name>'
-	print '    -p <password>'
-	print
-	print 'option values may be given by environment variables:'
-	print
-	if host is None:
-		print '    host: XNAT_HOST'
-	else:
-		print '    host: XNAT_HOST (set to %s)' % host
-	if user_name is None:
-		print '    user name: XNAT_USER'
-	else:
-		print '    user name: XNAT_USER (set to %s)' % user_name
-	if password is None:
-		print '    password: XNAT_PASSWORD'
-	else:
-		print '    password: XNAT_PASSWORD (currently set)'
-	print
-	print '%s will prompt for a missing user name, password, or host' % progname
-	print
-	print 'commands are:'
-	print
-	print '    list <experiment identifier>'
-	print '    info <experiment identifier> <workflow ID>'
-	print '    xml <experiment identifier> <workflow ID>'
-	print '    update <experiment identifier> <workflow ID> <step ID> <step description> <percentage complete>'
-	print '    complete <experiment identifier> <workflow ID>'
-	print '    fail <experiment identifier> <workflow ID> [step description]'
-	print
-	sys.exit(1)
+    print
+    print 'usage: %s [options] <command> [command arguments]' % progname
+    print
+    print 'XNAT workflow tool'
+    print
+    print 'options are:'
+    print
+    print '    -h <host>'
+    print '    -u <user name>'
+    print '    -p <password>'
+    print
+    print 'option values may be given by environment variables:'
+    print
+    if host is None:
+        print '    host: XNAT_HOST'
+    else:
+        print '    host: XNAT_HOST (set to %s)' % host
+    if user_name is None:
+        print '    user name: XNAT_USER'
+    else:
+        print '    user name: XNAT_USER (set to %s)' % user_name
+    if password is None:
+        print '    password: XNAT_PASSWORD'
+    else:
+        print '    password: XNAT_PASSWORD (currently set)'
+    print
+    print '%s will prompt for a missing user name, password, or host' % progname
+    print
+    print 'commands are:'
+    print
+    print '    list <experiment identifier>'
+    print '    info <experiment identifier> <workflow ID>'
+    print '    xml <experiment identifier> <workflow ID>'
+    print '    update <experiment identifier> <workflow ID> <step ID> <step description> <percentage complete>'
+    print '    complete <experiment identifier> <workflow ID>'
+    print '    fail <experiment identifier> <workflow ID> [step description]'
+    print
+    sys.exit(1)
 
 try:
-	(opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:')
+    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:')
 except getopt.error, data:
-	report_error(data)
-	sys.exit(1)
+    report_error(data)
+    sys.exit(1)
 
 if not args:
-	report_error('not enough non-option arguments')
-	sys.exit(1)
+    report_error('not enough non-option arguments')
+    sys.exit(1)
 
 for (option, value) in opts:
-	if option == '-h':
-		host = value
-	if option == '-u':
-		user_name = value
-	if option == '-p':
-		password = value
+    if option == '-h':
+        host = value
+    if option == '-u':
+        user_name = value
+    if option == '-p':
+        password = value
 
 if host is None:
-	sys.stdout.write('Host: ')
-	sys.stdout.flush()
-	host = sys.stdin.readline().strip()
+    sys.stdout.write('Host: ')
+    sys.stdout.flush()
+    host = sys.stdin.readline().strip()
 
 if user_name is None:
-	sys.stdout.write('User name: ')
-	sys.stdout.flush()
-	user_name = sys.stdin.readline().strip()
+    sys.stdout.write('User name: ')
+    sys.stdout.flush()
+    user_name = sys.stdin.readline().strip()
 
 if password is None:
-	password = getpass.getpass()
+    password = getpass.getpass()
 
 host = host.rstrip('/')
 
 command = args.pop(0)
 
 if command == 'list':
-	if not args:
-		report_error('"list" requires an argument')
-		sys.exit(0)
-	experiment_id = args[0]
-	xsc = XNATSoapCaller(user_name, password)
-	args = (('ns1:string', xsc.session), 
-        	('ns1:string', 'wrk:workflowData.ID'), 
-        	('ns1:string', '='), 
-        	('ns1:string', experiment_id), 
-        	('ns1:string', 'wrk:workflowData'))
-	for w_id in xsc.call('GetIdentifiers.jws', 'search', args):
-		url = '%s/app/template/XMLSearch.vm/id/%s/data_type/wrk:workflowData' % (host, str(w_id))
-		r = urllib2.Request(url)
-		xsc.cookiejar.add_cookie_header(r)
-		data = urllib2.urlopen(r).read()
-		doc = xml.dom.minidom.parseString(data)
-		workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
-		print w_id, \
-		      workflow_node.getAttribute('ExternalID'), \
-		      workflow_node.getAttribute('ID'), \
-		      workflow_node.getAttribute('status'), \
-		      workflow_node.getAttribute('pipeline_name'), \
-		      workflow_node.getAttribute('launch_time'), \
-		      workflow_node.getAttribute('percentageComplete')
+    if not args:
+        report_error('"list" requires an argument')
+        sys.exit(0)
+    experiment_id = args[0]
+    xsc = XNATSoapCaller(user_name, password)
+    args = (('ns1:string', xsc.session), 
+            ('ns1:string', 'wrk:workflowData.ID'), 
+            ('ns1:string', '='), 
+            ('ns1:string', experiment_id), 
+            ('ns1:string', 'wrk:workflowData'))
+    for w_id in xsc.call('GetIdentifiers.jws', 'search', args):
+        url = '%s/app/template/XMLSearch.vm/id/%s/data_type/wrk:workflowData' % (host, str(w_id))
+        r = urllib2.Request(url)
+        xsc.cookiejar.add_cookie_header(r)
+        data = urllib2.urlopen(r).read()
+        doc = xml.dom.minidom.parseString(data)
+        workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
+        print w_id, \
+              workflow_node.getAttribute('ExternalID'), \
+              workflow_node.getAttribute('ID'), \
+              workflow_node.getAttribute('status'), \
+              workflow_node.getAttribute('pipeline_name'), \
+              workflow_node.getAttribute('launch_time'), \
+              workflow_node.getAttribute('percentageComplete')
 elif command == 'xml':
-	if len(args) != 2:
-		report_error('"xml" requires two arguments')
-		sys.exit(0)
-	experiment_id = args[0]
-	try:
-		w_id = int(args[1])
-	except ValueError:
-		report_error('bad workflow ID "%s"' % args[1])
-		sys.exit(1)
-	xsc = XNATSoapCaller(user_name, password)
-	print get_workflow_xml(xsc, experiment_id, w_id)
+    if len(args) != 2:
+        report_error('"xml" requires two arguments')
+        sys.exit(0)
+    experiment_id = args[0]
+    try:
+        w_id = int(args[1])
+    except ValueError:
+        report_error('bad workflow ID "%s"' % args[1])
+        sys.exit(1)
+    xsc = XNATSoapCaller(user_name, password)
+    print get_workflow_xml(xsc, experiment_id, w_id)
 elif command == 'info':
-	if len(args) != 2:
-		report_error('"info" requires two arguments')
-		sys.exit(0)
-	experiment_id = args[0]
-	try:
-		w_id = int(args[1])
-	except ValueError:
-		report_error('bad workflow ID "%s"' % args[1])
-		sys.exit(1)
-	xsc = XNATSoapCaller(user_name, password)
-	doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
-	workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
-	print '--- basic info'
-	print
-	for attr in ('data_type', 
-	             'ID', 
-	             'ExternalID', 
-	             'status', 
-	             'pipeline_name', 
-	             'step_description', 
-	             'launch_time', 
-	             'current_step_id', 
-	             'current_step_launch_time', 
-	             'percentageComplete'):
-			print '%-25s %s' % (attr + ':', workflow_node.getAttribute(attr))
-	print
-	environment_nodes = doc.getElementsByTagName('wrk:Workflow')
-	if environment_nodes:
-		print '--- execution environment'
-		print
-		pairs = []
-		for tag in ('pipeline', 
-		            'xnatuser', 
-		            'host', 
-		            'notify', 
-		            'dataType', 
-		            'id', 
-		            'supressNotification'):
-			elements = environment_nodes[0].getElementsByTagName('wrk:' + tag)
-			if not elements:
-				continue
-			pairs.append((tag+':', node_text(elements[0])))
-		print_pairs(pairs)
-		print
-		print '--- parameters'
-		print
-		pairs = []
-		for pn in environment_nodes[0].getElementsByTagName('wrk:parameter'):
-			name = pn.getAttribute('name')
-			value = node_text(pn)
-			pairs.append((name+':', value))
-		print_pairs(pairs)
-		print
-	xsc.close()
+    if len(args) != 2:
+        report_error('"info" requires two arguments')
+        sys.exit(0)
+    experiment_id = args[0]
+    try:
+        w_id = int(args[1])
+    except ValueError:
+        report_error('bad workflow ID "%s"' % args[1])
+        sys.exit(1)
+    xsc = XNATSoapCaller(user_name, password)
+    doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
+    workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
+    print '--- basic info'
+    print
+    for attr in ('data_type', 
+                 'ID', 
+                 'ExternalID', 
+                 'status', 
+                 'pipeline_name', 
+                 'step_description', 
+                 'launch_time', 
+                 'current_step_id', 
+                 'current_step_launch_time', 
+                 'percentageComplete'):
+            print '%-25s %s' % (attr + ':', workflow_node.getAttribute(attr))
+    print
+    environment_nodes = doc.getElementsByTagName('wrk:Workflow')
+    if environment_nodes:
+        print '--- execution environment'
+        print
+        pairs = []
+        for tag in ('pipeline', 
+                    'xnatuser', 
+                    'host', 
+                    'notify', 
+                    'dataType', 
+                    'id', 
+                    'supressNotification'):
+            elements = environment_nodes[0].getElementsByTagName('wrk:' + tag)
+            if not elements:
+                continue
+            pairs.append((tag+':', node_text(elements[0])))
+        print_pairs(pairs)
+        print
+        print '--- parameters'
+        print
+        pairs = []
+        for pn in environment_nodes[0].getElementsByTagName('wrk:parameter'):
+            name = pn.getAttribute('name')
+            value = node_text(pn)
+            pairs.append((name+':', value))
+        print_pairs(pairs)
+        print
+    xsc.close()
 elif command == 'update':
-	if len(args) != 5:
-		report_error('"update" requires five arguments')
-		sys.exit(0)
-	experiment_id = args[0]
-	try:
-		w_id = int(args[1])
-	except ValueError:
-		report_error('bad workflow ID "%s"' % args[1])
-		sys.exit(1)
-	xsc = XNATSoapCaller(user_name, password)
-	doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
-	workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
-	workflow_node.setAttribute('status', 'Running')
-	t = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-	workflow_node.setAttribute('current_step_launch_time', t)
-	workflow_node.setAttribute('current_step_id', args[2])
-	workflow_node.setAttribute('step_description', args[3])
-	workflow_node.setAttribute('percentageComplete', args[4])
-	update(xsc, doc)
-	xsc.close()
-	print 'updated workflow %d for %s' % (w_id, experiment_id)
+    if len(args) != 5:
+        report_error('"update" requires five arguments')
+        sys.exit(0)
+    experiment_id = args[0]
+    try:
+        w_id = int(args[1])
+    except ValueError:
+        report_error('bad workflow ID "%s"' % args[1])
+        sys.exit(1)
+    xsc = XNATSoapCaller(user_name, password)
+    doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
+    workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
+    workflow_node.setAttribute('status', 'Running')
+    t = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    workflow_node.setAttribute('current_step_launch_time', t)
+    workflow_node.setAttribute('current_step_id', args[2])
+    workflow_node.setAttribute('step_description', args[3])
+    workflow_node.setAttribute('percentageComplete', args[4])
+    update(xsc, doc)
+    xsc.close()
+    print 'updated workflow %d for %s' % (w_id, experiment_id)
 elif command == 'complete':
-	if len(args) != 2:
-		report_error('"complete" requires two arguments')
-		sys.exit(0)
-	experiment_id = args[0]
-	try:
-		w_id = int(args[1])
-	except ValueError:
-		report_error('bad workflow ID "%s"' % args[1])
-		sys.exit(1)
-	xsc = XNATSoapCaller(user_name, password)
-	doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
-	workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
-	workflow_node.setAttribute('status', 'Complete')
-	t = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-	workflow_node.setAttribute('current_step_launch_time', t)
-	workflow_node.setAttribute('percentageComplete', '100.0')
-	try:
-		workflow_node.removeAttribute('current_step_id')
-	except xml.dom.NotFoundErr:
-		pass
-	try:
-		workflow_node.removeAttribute('step_description')
-	except xml.dom.NotFoundErr:
-		pass
-	update(xsc, doc)
-	xsc.close()
-	print 'closed (completed) workflow %d for %s' % (w_id, experiment_id)
+    if len(args) != 2:
+        report_error('"complete" requires two arguments')
+        sys.exit(0)
+    experiment_id = args[0]
+    try:
+        w_id = int(args[1])
+    except ValueError:
+        report_error('bad workflow ID "%s"' % args[1])
+        sys.exit(1)
+    xsc = XNATSoapCaller(user_name, password)
+    doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
+    workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
+    workflow_node.setAttribute('status', 'Complete')
+    t = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    workflow_node.setAttribute('current_step_launch_time', t)
+    workflow_node.setAttribute('percentageComplete', '100.0')
+    try:
+        workflow_node.removeAttribute('current_step_id')
+    except xml.dom.NotFoundErr:
+        pass
+    try:
+        workflow_node.removeAttribute('step_description')
+    except xml.dom.NotFoundErr:
+        pass
+    update(xsc, doc)
+    xsc.close()
+    print 'closed (completed) workflow %d for %s' % (w_id, experiment_id)
 elif command == 'fail':
-	if len(args) < 2 or len(args) > 3:
-		report_error('"fail" requires two or three arguments')
-		sys.exit(0)
-	experiment_id = args[0]
-	try:
-		w_id = int(args[1])
-	except ValueError:
-		report_error('bad workflow ID "%s"' % args[1])
-		sys.exit(1)
-	xsc = XNATSoapCaller(user_name, password)
-	doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
-	workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
-	workflow_node.setAttribute('status', 'Failed')
-	if len(args) > 2:
-		workflow_node.setAttribute('step_description', args[2])
-	update(xsc, doc)
-	xsc.close()
-	print 'closed (failed) workflow %d for %s' % (w_id, experiment_id)
+    if len(args) < 2 or len(args) > 3:
+        report_error('"fail" requires two or three arguments')
+        sys.exit(0)
+    experiment_id = args[0]
+    try:
+        w_id = int(args[1])
+    except ValueError:
+        report_error('bad workflow ID "%s"' % args[1])
+        sys.exit(1)
+    xsc = XNATSoapCaller(user_name, password)
+    doc = xml.dom.minidom.parseString(get_workflow_xml(xsc, experiment_id, w_id))
+    workflow_node = doc.getElementsByTagName('wrk:Workflow')[0]
+    workflow_node.setAttribute('status', 'Failed')
+    if len(args) > 2:
+        workflow_node.setAttribute('step_description', args[2])
+    update(xsc, doc)
+    xsc.close()
+    print 'closed (failed) workflow %d for %s' % (w_id, experiment_id)
 else:
-	report_error('unknown command "%s"' % command)
-	sys.exit(1)
+    report_error('unknown command "%s"' % command)
+    sys.exit(1)
 
 sys.exit(0)
 

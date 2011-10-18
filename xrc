@@ -12,158 +12,169 @@ import urlparse
 import httplib
 
 def report_error(msg):
-	sys.stderr.write('%s: %s\n' % (progname, msg))
-	sys.stderr.write('run %s with no arguments for usage\n' % progname)
-	return
+    sys.stderr.write('%s: %s\n' % (progname, msg))
+    sys.stderr.write('run %s with no arguments for usage\n' % progname)
+    return
 
 def debug(msg):
-	if debug_flag:
-		print msg
-	return
+    if debug_flag:
+        print msg
+    return
 
 progname = os.path.basename(sys.argv[0])
 
 try:
-	host = os.environ['XNAT_HOST']
+    host = os.environ['XNAT_HOST']
 except KeyError:
-	host = None
+    host = None
 
 try:
-	user_name = os.environ['XNAT_USER']
+    user_name = os.environ['XNAT_USER']
 except KeyError:
-	user_name = None
+    user_name = None
 
 try:
-	password = os.environ['XNAT_PASSWORD']
+    password = os.environ['XNAT_PASSWORD']
 except KeyError:
-	password = None
+    password = None
 
 if len(sys.argv) == 1:
-	print
-	print 'usage: %s [options] <method> <request>' % progname
-	print
-	print 'call an XNAT REST service'
-	print
-	print 'options are:'
-	print
-	print '    -d -- debug'
-	print '    -h <host>'
-	print '    -u <user name>'
-	print '    -p <password>'
-	print '    -b <request body file> (or "-" for stdin)'
-	print
-	print 'option values may be given by environment variables:'
-	print
-	if host is None:
-		print '    host: XNAT_HOST'
-	else:
-		print '    host: XNAT_HOST (set to %s)' % host
-	if user_name is None:
-		print '    user name: XNAT_USER'
-	else:
-		print '    user name: XNAT_USER (set to %s)' % user_name
-	if password is None:
-		print '    password: XNAT_PASSWORD'
-	else:
-		print '    password: XNAT_PASSWORD (currently set)'
-	print
-	print '%s will prompt for a missing user name, password, or host' % progname
-	print
-	print 'method must be GET, PUT, POST, or DELETE'
-	print
-	print 'cheat sheet (see also http://docs.xnat.org/XNAT+REST+API):'
-	print
-	print '    /data/JSESSION'
-	print
-	sys.exit(1)
+    print
+    print 'usage: %s [options] <method> <request>' % progname
+    print
+    print 'call an XNAT REST service'
+    print
+    print 'options are:'
+    print
+    print '    -d -- debug'
+    print '    -n -- no authentication'
+    print '    -h <host>'
+    print '    -u <user name>'
+    print '    -p <password>'
+    print '    -b <request body file> (or "-" for stdin)'
+    print
+    print 'option values may be given by environment variables:'
+    print
+    if host is None:
+        print '    host: XNAT_HOST'
+    else:
+        print '    host: XNAT_HOST (set to %s)' % host
+    if user_name is None:
+        print '    user name: XNAT_USER'
+    else:
+        print '    user name: XNAT_USER (set to %s)' % user_name
+    if password is None:
+        print '    password: XNAT_PASSWORD'
+    else:
+        print '    password: XNAT_PASSWORD (currently set)'
+    print
+    print '%s will prompt for a missing user name, password, or host' % progname
+    print
+    print 'method must be GET, PUT, POST, or DELETE'
+    print
+    print 'cheat sheet (see also http://docs.xnat.org/XNAT+REST+API):'
+    print
+    print '    /data/JSESSION'
+    print
+    sys.exit(1)
 
 try:
-	(opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:db:')
+    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:db:n')
 except getopt.error, data:
-	report_error(data)
-	sys.exit(1)
+    report_error(data)
+    sys.exit(1)
 
 if len(args) < 2:
-	report_error('not enough non-option arguments')
-	sys.exit(1)
+    report_error('not enough non-option arguments')
+    sys.exit(1)
 
 if len(args) > 2:
-	report_error('too many non-option arguments')
-	sys.exit(1)
+    report_error('too many non-option arguments')
+    sys.exit(1)
 
 (method, request) = args
 
 if method not in ('GET', 'PUT', 'POST', 'DELETE'):
-	report_error('unknown method "%s"' % method)
-	sys.exit(1)
+    report_error('unknown method "%s"' % method)
+    sys.exit(1)
 
 if not request.startswith('/'):
-	report_error('request must start with "/"')
-	sys.exit(1)
+    report_error('request must start with "/"')
+    sys.exit(1)
 
 debug_flag = False
 body_fname = None
+auth_flag = True
 
 for (option, value) in opts:
-	if option == '-h':
-		host = value
-	if option == '-u':
-		user_name = value
-	if option == '-p':
-		password = value
-	if option == '-d':
-		debug_flag = True
-	if option == '-b':
-		body_fname = value
+    if option == '-h':
+        host = value
+    if option == '-u':
+        user_name = value
+    if option == '-p':
+        password = value
+    if option == '-d':
+        debug_flag = True
+    if option == '-b':
+        body_fname = value
+    if option == '-n':
+        auth_flag = False
 
 if host is None:
-	sys.stdout.write('Host: ')
-	sys.stdout.flush()
-	host = sys.stdin.readline().strip()
-
-if user_name is None:
-	sys.stdout.write('User name: ')
-	sys.stdout.flush()
-	user_name = sys.stdin.readline().strip()
-
-if password is None:
-	password = getpass.getpass()
+    sys.stdout.write('Host: ')
+    sys.stdout.flush()
+    host = sys.stdin.readline().strip()
 
 if body_fname is None:
-	body = None
+    body = None
 elif body_fname == '-':
-	body = sys.stdin.read()
+    body = sys.stdin.read()
 else:
-	try:
-		body = open(body_fname).read()
-	except IOError, data:
-		sys.stderr.write('%s: %s\n' % (progname, data))
-		sys.exit(1)
+    try:
+        body = open(body_fname).read()
+    except IOError, data:
+        sys.stderr.write('%s: %s\n' % (progname, data))
+        sys.exit(1)
 
 host = host.rstrip('/')
-
-auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
-
 url_parts = urlparse.urlsplit(host)
+
+if auth_flag:
+    if user_name is None:
+        sys.stdout.write('User name: ')
+        sys.stdout.flush()
+        user_name = sys.stdin.readline().strip()
+    if password is None:
+        password = getpass.getpass()
+    auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
+    headers = {'Authorization': auth}
+else:
+    hc = httplib.HTTPConnection(url_parts.netloc)
+    hc.request('GET', url_parts.path)
+    response = hc.getresponse()
+    print response.read()
+    hc.close()
+
+print headers
 
 hc = httplib.HTTPConnection(url_parts.netloc)
 try:
-	path = '%s%s' % (url_parts.path, request)
-	debug('method: %s' % method)
-	debug('path: %s' % path)
-	debug('authorization: %s' % auth)
-	if body:
-		hc.request(method, path, body=body, headers={'Authorization': auth})
-	else:
-		hc.request(method, path, headers={'Authorization': auth})
-	response = hc.getresponse()
-	data = response.read()
+    path = '%s%s' % (url_parts.path, request)
+    debug('method: %s' % method)
+    debug('path: %s' % path)
+    debug('authorization: %s' % auth)
+    if body:
+        hc.request(method, path, body=body, headers=headers)
+    else:
+        hc.request(method, path, headers=headers)
+    response = hc.getresponse()
+    data = response.read()
 finally:
-	hc.close()
+    hc.close()
 
 print response.status, response.reason
 for (name, value) in response.getheaders():
-	print '%s: %s' % (name, value)
+    print '%s: %s' % (name, value)
 
 print
 
