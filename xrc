@@ -150,7 +150,10 @@ if auth_flag:
     auth = 'Basic %s' % base64.b64encode('%s:%s' % (user_name, password))
     headers['Authorization'] = auth
 else:
-    hc = httplib.HTTPConnection(url_parts.netloc)
+    if url_parts.scheme == 'https':
+        hc = httplib.HTTPSConnection(url_parts.netloc)
+    else:
+        hc = httplib.HTTPConnection(url_parts.netloc)
     hc.request('GET', url_parts.path + '/')
     response = hc.getresponse()
     set_cookie = response.getheader('Set-Cookie')
@@ -158,9 +161,13 @@ else:
         headers['Cookie'] = set_cookie.split(';')[0]
     hc.close()
 
-hc = httplib.HTTPConnection(url_parts.netloc)
+if url_parts.scheme == 'https':
+    hc = httplib.HTTPSConnection(url_parts.netloc)
+else:
+    hc = httplib.HTTPConnection(url_parts.netloc)
 try:
     path = '%s%s' % (url_parts.path, request)
+    debug('scheme: %s' % url_parts.scheme)
     debug('method: %s' % method)
     debug('path: %s' % path)
     for name in sorted(headers):
