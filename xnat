@@ -45,7 +45,7 @@ def get_project(id):
 progname = os.path.basename(sys.argv[0])
 
 try:
-	host = os.environ['XNAT_HOST']
+	host = os.environ['XNAT_URI']
 except KeyError:
 	host = None
 
@@ -75,9 +75,9 @@ if len(sys.argv) == 1:
 	print 'option values may be given by environment variables:'
 	print
 	if host is None:
-		print '    host: XNAT_HOST'
+		print '    host: XNAT_URI'
 	else:
-		print '    host: XNAT_HOST (set to %s)' % host
+		print '    host: XNAT_URI (set to %s)' % host
 	if user_name is None:
 		print '    user name: XNAT_USER'
 	else:
