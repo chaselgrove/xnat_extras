@@ -68,6 +68,7 @@ if len(sys.argv) == 1:
     print 'options are:'
     print
     print '    -d -- debug'
+    print '    -n -- no authentication'
     print '    -h <host>'
     print '    -u <user name>'
     print '    -p <password>'
@@ -99,7 +100,7 @@ if len(sys.argv) == 1:
     sys.exit(1)
 
 try:
-    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:d')
+    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:dn')
 except getopt.error, data:
     report_error(data)
     sys.exit(1)
@@ -109,6 +110,7 @@ if len(args) < 1:
     sys.exit(1)
 
 debug_flag = False
+auth_flag = True
 
 for (option, value) in opts:
     if option == '-h':
@@ -119,27 +121,32 @@ for (option, value) in opts:
         password = value
     if option == '-d':
         debug_flag = True
+    if option == '-n':
+        auth_flag = False
 
 if host is None:
     sys.stdout.write('Host: ')
     sys.stdout.flush()
     host = sys.stdin.readline().strip()
 
-if user_name is None:
-    sys.stdout.write('User name: ')
-    sys.stdout.flush()
-    user_name = sys.stdin.readline().strip()
-
-if password is None:
-    password = getpass.getpass()
+if auth_flag:
+    if user_name is None:
+        sys.stdout.write('User name: ')
+        sys.stdout.flush()
+        user_name = sys.stdin.readline().strip()
+    if password is None:
+        password = getpass.getpass()
 
 host = host.rstrip('/')
 
 command = args.pop(0)
 
-interface = pyxnat.Interface(server=host, 
-                             user=user_name, 
-                             password=password)
+if auth_flag:
+    interface = pyxnat.Interface(server=host, 
+                                 user=user_name, 
+                                 password=password)
+else:
+    interface = pyxnat.Interface(server=host, anonymous=True)
 
 if command == 'xml':
     if len(args) != 2:
