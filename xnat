@@ -94,8 +94,8 @@ if len(sys.argv) == 1:
     print
     print '    xml <type> <ID>'
     print '    projects'
-    print '    subjects [project]'
-    print '    experiments [project|subject]'
+    print '    subjects <project>'
+#    print '    experiments <subject>'
     print
     sys.exit(1)
 
@@ -174,44 +174,24 @@ elif command == 'projects':
         info.append(p.attrs.mget(('ID', 'secondary_ID', 'name')))
     print_table(info)
 elif command == 'subjects':
-    if len(args) == 0:
-        projects = interface.select.projects().get()
-    else:
-        projects = [args[0]]
-    for p in projects:
-        print interface.select.projects(p).get()
-        print p
-        info = []
-        for s in interface.select.project(p).subjects():
-            info.append(s.attrs.mget(('ID', 'label')))
-        print_table(info, indent='    ')
-elif command == 'experiments':
+    if len(args) != 1:
+        report_error('missing argument to "subjects"')
+        sys.exit(1)
+    info = []
+    for s in interface.select.project(args[0]).subjects():
+        info.append(s.attrs.mget(('ID', 'label')))
+    print_table(info)
     """
-
-def get_experiements(interface, args):
-    if args:
-        for s in interface.select('//subjects'):
-            if s.id() == args[0]:
-                return subject
-        for p in interface.select.projects():
-            if p.id() == args[0]:
-                return project
-        return None
-    return [interface.select.projects().get()]
-
-    get_experiements(interface, args)
-    if len(args) == 0:
-        projects = [interface.select.projects().get()]
-    else:
-        subject = None
-        if subject is None:
+elif command == 'experiments':
+    if len(args) != 1:
+        report_error('missing argument to "experiments"')
+        sys.exit(1)
+    info = []
+    for e in interface.select('//experiments/%s' % args[0]):
+        print e, e.id(), e.label()
+        info.append((e.id(), e.label()))
+    print_table(info)
 """
-
-#if project is None:
-#msg = '%s: no project or subject "%s"\n' % (progname, argv[0])
-#sys.stderr.write(msg)
-#sys.exit(1)
-
 else:
     report_error('unknown command \"%s\"\n' % command)
     sys.exit(1)
