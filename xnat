@@ -95,7 +95,7 @@ if len(sys.argv) == 1:
     print '    xml <type> <ID>'
     print '    projects'
     print '    subjects <project>'
-#    print '    experiments <subject>'
+    print '    experiments <project> <subject>'
     print
     sys.exit(1)
 
@@ -181,17 +181,14 @@ elif command == 'subjects':
     for s in interface.select.project(args[0]).subjects():
         info.append(s.attrs.mget(('ID', 'label')))
     print_table(info)
-    """
 elif command == 'experiments':
-    if len(args) != 1:
-        report_error('missing argument to "experiments"')
+    if len(args) != 2:
+        report_error('missing argument(s) to "experiments"')
         sys.exit(1)
     info = []
-    for e in interface.select('//experiments/%s' % args[0]):
-        print e, e.id(), e.label()
+    for e in interface.select.projects(args[0]).subjects(args[1]).experiments():
         info.append((e.id(), e.label()))
     print_table(info)
-"""
 else:
     report_error('unknown command \"%s\"\n' % command)
     sys.exit(1)
