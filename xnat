@@ -95,11 +95,6 @@ def report_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
-def debug(msg):
-    if debug_flag:
-        print msg
-    return
-
 def print_table(rows, indent=''):
     if len(rows) == 0:
         return
@@ -379,7 +374,6 @@ if len(sys.argv) == 1:
     print
     print 'options are:'
     print
-    print '    -d -- debug'
     print '    -n -- no authentication'
     print '    -h <host>'
     print '    -u <user name>'
@@ -417,7 +411,7 @@ if len(sys.argv) == 1:
     sys.exit(1)
 
 try:
-    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:dn')
+    (opts, args) = getopt.getopt(sys.argv[1:], 'h:u:p:n')
 except getopt.error, data:
     report_error(data)
     sys.exit(1)
@@ -426,7 +420,6 @@ if len(args) < 1:
     report_error('no command given')
     sys.exit(1)
 
-debug_flag = False
 auth_flag = True
 
 for (option, value) in opts:
@@ -436,8 +429,6 @@ for (option, value) in opts:
         user_name = value
     if option == '-p':
         password = value
-    if option == '-d':
-        debug_flag = True
     if option == '-n':
         auth_flag = False
 
