@@ -9,6 +9,87 @@ import getopt
 import getpass
 import pyxnat
 
+project_attributes = ('secondary_ID', 
+                      'name', 
+                      'keywords', 
+                      'alias', 
+                      'pi_firstname', 
+                      'pi_lastname', 
+                      'xnat:projectData/meta/last_modified', 
+                      'xnat:projectData/meta/insert_date')
+
+subject_attributes = ('group', 
+                      'src', 
+                      'pi_firstname', 
+                      'pi_lastname', 
+                      'dob', 
+                      'yob', 
+                      'age', 
+                      'gender', 
+                      'handedness', 
+                      'last_modified', 
+                      'insert_date', 
+                      'insert_user')
+
+experiment_attributes = ('visit_id', 
+                         'date', 
+                         'time', 
+                         'pi_firstname', 
+                         'pi_lastname', 
+                         'validation_method', 
+                         'validation_status', 
+                         'validation_date', 
+                         'validation_notes', 
+                         'last_modified', 
+                         'insert_date', 
+                         'insert_user', 
+                         'scanner', 
+                         'dcmAccessionNumber', 
+                         'dcmPatientId', 
+                         'dcmPatientName', 
+                         'session_type', 
+                         'modality', 
+                         'UID', 
+                         'last_modified', 
+                         'insert_date', 
+                         'insert_user')
+
+mr_session_attributes = ()
+pet_session_attributes = ()
+
+scan_attributes = ('type', 
+                   'UID', 
+                   'quality', 
+                   'condition', 
+                   'series_description', 
+                   'scanner', 
+                   'modality', 
+                   'frames', 
+                   'last_modified', 
+                   'insert_date', 
+                   'insert_user')
+
+mr_scan_attributes = ()
+
+pet_scan_attributes = ()
+
+reconstruction_attributes = ('type', 
+                             'baseScanType', 
+                             'xnat:reconstructedImageData/meta/last_modified', 
+                             'xnat:reconstructedImageData/meta/insert_date')
+
+assessor_attributes = ('visit_id', 
+                       'date', 
+                       'time', 
+                       'pi_firstname', 
+                       'pi_lastname', 
+                       'validation_method', 
+                       'validation_status', 
+                       'validation_date', 
+                       'last_modified', 
+                       'insert_date', 
+                       'insert_user')
+
 def report_error(msg):
     sys.stderr.write('%s: %s\n' % (progname, msg))
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
@@ -25,22 +106,281 @@ def print_table(rows, indent=''):
     n_cols = len(rows[0])
     widths = []
     for i in xrange(n_cols):
-        widths.append(max([ len(el[i]) for el in rows ]))
+        widths.append(max([ len(str(el[i])) for el in rows ]))
     for row in rows:
-        parts = [ row[i].ljust(widths[i]) for i in xrange(n_cols) ]
+        parts = [ str(row[i]).ljust(widths[i]) for i in xrange(n_cols) ]
         print indent + '  '.join(parts)
     return
 
-def get_projects():
-    """get all projects"""
-    return [ p for p in interface.select.projects() ]
+def do_projects():
+    info = []
+    for p in interface.select.projects():
+        info.append(p.attrs.mget(('ID', 'secondary_ID', 'name')))
+    print_table(info)
+    return True
 
-def get_project(id):
-    """get a project given a case-insensitive ID"""
-    for p in get_projects():
-        if id.lower() == p.id().lower():
-            return p
-    raise KeyError, id
+def do_subjects(project_id):
+    info = []
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    for s in project.subjects():
+        info.append(s.attrs.mget(('ID', 'label')))
+    print_table(info)
+    return True
+
+def do_experiments(project_id, subject_id):
+    info = []
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    for e in subject.experiments():
+        info.append((e.id(), e.label()))
+    print_table(info)
+    return True
+
+def add_attributes(info, object, attr_names):
+    attr_values = object.attrs.mget(attr_names)
+    info.extend(zip(attr_names, attr_values))
+    return
+
+def do_project(project_id, xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    if xml_flag:
+        print project.get()
+    else:
+        info = []
+        info.append(('ID', project.id()))
+        info.append(('label', project.label()))
+        info.append(('datatype', project.datatype()))
+        info.append(('accessibility', project.accessibility()))
+        for m in project.members():
+            info.append(('member', m))
+        for o in project.owners():
+            info.append(('owner', o))
+        for u in project.users():
+            info.append(('user', u))
+        for c in project.collaborators():
+            info.append(('collaborator', c))
+        info.append(('current_arc', project.current_arc()))
+        info.append(('prearchive_code', project.prearchive_code()))
+        info.append(('quarantine_code', project.quarantine_code()))
+        for r in project.resources():
+            info.append(('resource', r.id()))
+        for s in project.subjects():
+            info.append(('subject', s.id()))
+        add_attributes(info, project, project_attributes)
+        print_table(info)
+    return True
+
+def do_subject(project_id, subject_id, xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, subject_id, project_id))
+        return False
+    if xml_flag:
+        print subject.get()
+    else:
+        info = []
+        info.append(('datatype', subject.datatype()))
+        info.append(('ID', subject.id()))
+        info.append(('label', subject.label()))
+        info.append(('project', subject.parent().id()))
+        for s in subject.shares():
+            info.append(('share', s.id()))
+        for e in subject.experiments():
+            info.append(('experiment', e.id()))
+        for r in subject.resources():
+            info.append(('resource', r.id()))
+        add_attributes(info, subject, subject_attributes)
+        print_table(info)
+    return True
+
+def do_experiment(project_id, subject_id, experiment_id, xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        return False
+    if xml_flag:
+        print experiment.get()
+    else:
+        info = []
+        info.append(('ID', experiment.id()))
+        info.append(('label', experiment.label()))
+        info.append(('datatype', experiment.datatype()))
+        info.append(('subject', experiment.parent().id()))
+        for a in experiment.assessors():
+            info.append(('assessor', a.id()))
+        for r in experiment.reconstructions():
+            info.append(('reconstruction', r.id()))
+        for r in experiment.resources():
+            info.append(('resource', r.id()))
+        for s in experiment.scans():
+            info.append(('scan', s.id()))
+        for s in experiment.shares():
+            info.append(('share', s.id()))
+        add_attributes(info, experiment, experiment_attributes)
+        if experiment.datatype() == 'xnat:mrSessionData':
+            add_attributes(info, experiment, mr_session_attributes)
+        if experiment.datatype() == 'xnat:petSessionData':
+            add_attributes(info, experiment, pet_session_attributes)
+        print_table(info)
+    return True
+
+def do_scan(project_id, subject_id, experiment_id, scan_id, xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        return False
+    scan = experiment.scan(scan_id)
+    if not scan.exists():
+        fmt = '%s: scan %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, scan_id, experiment_id))
+        return False
+    if xml_flag:
+        print scan.get()
+    else:
+        info = []
+        info.append(('ID', scan.id()))
+        info.append(('label', scan.label()))
+        info.append(('datatype', scan.datatype()))
+        info.append(('experiment', scan.parent().id()))
+#        info.append(('namespaces', scan.namespaces()))
+        for r in scan.resources():
+            info.append(('resource', r.id()))
+        add_attributes(info, scan, scan_attributes)
+        if scan.datatype() == 'xnat:mrScanData':
+            add_attributes(info, scan, mr_scan_attributes)
+        if scan.datatype() == 'xnat:petScanData':
+            add_attributes(info, scan, pet_scan_attributes)
+        print_table(info)
+    return True
+
+def do_reconstruction(project_id, 
+                      subject_id, 
+                      experiment_id, 
+                      reconstruction_id, 
+                      xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        return False
+    reconstruction = experiment.reconstruction(reconstruction_id)
+    if not reconstruction.exists():
+        fmt = '%s: reconstruction %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, reconstruction_id, experiment_id))
+        return False
+    if xml_flag:
+        print reconstruction.get()
+    else:
+        info = []
+        info.append(('ID', reconstruction.id()))
+        info.append(('datatype', reconstruction.datatype()))
+        info.append(('label', reconstruction.label()))
+#        info.append(('namespaces', reconstruction.namespaces()))
+        info.append(('experiment', reconstruction.parent().id()))
+        for in_res in reconstruction.in_resources():
+            info.append(('in_resource', in_res.id()))
+        for out_res in reconstruction.out_resources():
+            info.append(('out_resource', out_res.id()))
+        add_attributes(info, reconstruction, reconstruction_attributes)
+        print_table(info)
+    return True
+
+def do_assessor(project_id, subject_id, experiment_id, assessor_id, xml_flag):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        return False
+    assessor = experiment.assessor(assessor_id)
+    if not assessor.exists():
+        fmt = '%s: assessor %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, assessor_id, experiment_id))
+        return False
+    if xml_flag:
+        print assessor.get()
+    else:
+        info = []
+        info.append(('ID', assessor.id()))
+        info.append(('datatype', assessor.datatype()))
+        info.append(('label', assessor.label()))
+        info.append(('namespaces', assessor.namespaces()))
+        info.append(('experiment', assessor.parent().id()))
+#        print assessor.resources()
+#        for res in assessor.resources():
+#            info.append(('resource', res))
+        for in_res in assessor.in_resources():
+            info.append(('in_resource', in_res.id()))
+        for out_res in assessor.out_resources():
+            info.append(('out_resource', out_res.id()))
+        for s in assessor.shares():
+            info.append(('share', s.id()))
+        add_attributes(info, assessor, assessor_attributes)
+        print_table(info)
+    return True
 
 progname = os.path.basename(sys.argv[0])
 
@@ -92,10 +432,15 @@ if len(sys.argv) == 1:
     print
     print 'commands are:'
     print
-    print '    xml <type> <ID>'
     print '    projects'
     print '    subjects <project>'
     print '    experiments <project> <subject>'
+    print '    project [-x|--xml] <project>'
+    print '    subject [-x|--xml] <project> <subject>'
+    print '    experiment [-x|--xml] <project> <subject> <experiment>'
+    print '    scan [-x|--xml] <project> <subject> <experiment>'
+    print '    reconstruction [-x|--xml] <project> <subject> <experiment>'
+    print '    assessor [-x|--xml] <project> <subject> <experiment>'
     print
     sys.exit(1)
 
@@ -148,47 +493,111 @@ if auth_flag:
 else:
     interface = pyxnat.Interface(server=host, anonymous=True)
 
-if command == 'xml':
-    if len(args) != 2:
-        report_error('wrong number of arguments to "xml"')
+if command == 'projects':
+    if not do_projects():
         sys.exit(1)
-    (type, id) = args
-    if type == 'project':
-        projects = [ p for p in interface.select.projects(id) ]
-        if len(projects) == 0:
-            sys.stderr.write('%s: project "%s" not found\n' % (progname, id))
-            sys.exit(1)
-        print projects[0].get()
-    elif type == 'subject':
-        subjects = [ s for s in interface.select.projects().subjects() ]
-        if len(subjects) == 0:
-            sys.stderr.write('%s: subject "%s" not found\n' % (progname, id))
-            sys.exit(1)
-        print subjects[0].get()
-    else:
-        report_error('bad type "%s"' % type)
-        sys.exit(1)
-elif command == 'projects':
-    info = []
-    for p in interface.select.projects():
-        info.append(p.attrs.mget(('ID', 'secondary_ID', 'name')))
-    print_table(info)
 elif command == 'subjects':
     if len(args) != 1:
         report_error('missing argument to "subjects"')
         sys.exit(1)
-    info = []
-    for s in interface.select.project(args[0]).subjects():
-        info.append(s.attrs.mget(('ID', 'label')))
-    print_table(info)
+    if not do_subjects(args[0]):
+        sys.exit(1)
 elif command == 'experiments':
     if len(args) != 2:
-        report_error('missing argument(s) to "experiments"')
+        report_error('not enough arguments to "experiments"')
         sys.exit(1)
-    info = []
-    for e in interface.select.projects(args[0]).subjects(args[1]).experiments():
-        info.append((e.id(), e.label()))
-    print_table(info)
+    if not do_experiments(args[0], args[1]):
+        sys.exit(1)
+elif command == 'project':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"project" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if not args2:
+        report_error('no project given')
+        sys.exit(1)
+    if not do_project(args2[0], xml_flag):
+        sys.exit(1)
+elif command == 'subject':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"subject" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if len(args2) < 2:
+        report_error('not enough arguments to "subject"')
+        sys.exit(1)
+    if not do_subject(args2[0], args2[1], xml_flag):
+        sys.exit(1)
+elif command == 'experiment':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"experiment" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if len(args2) < 3:
+        report_error('not enough arguments to "experiment"')
+        sys.exit(1)
+    if not do_experiment(args2[0], args2[1], args2[2], xml_flag):
+        sys.exit(1)
+elif command == 'scan':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"scan" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if len(args2) < 4:
+        report_error('not enough arguments to "scan"')
+        sys.exit(1)
+    if not do_scan(args2[0], args2[1], args2[2], args2[3], xml_flag):
+        sys.exit(1)
+elif command == 'reconstruction':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"reconstruction" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if len(args2) < 4:
+        report_error('not enough arguments to "reconstruction"')
+        sys.exit(1)
+    if not do_reconstruction(args2[0], args2[1], args2[2], args2[3], xml_flag):
+        sys.exit(1)
+elif command == 'assessor':
+    xml_flag = False
+    try:
+        (options, args2) = getopt.getopt(args, 'x', 'xml')
+    except getopt.error, data:
+        report_error('"assessor" %s' % str(data))
+        sys.exit(1)
+    for (option, value) in options:
+        if option in ('-x', '--xml'):
+            xml_flag = True
+    if len(args2) < 4:
+        report_error('not enough arguments to "assessor"')
+        sys.exit(1)
+    if not do_assessor(args2[0], args2[1], args2[2], args2[3], xml_flag):
+        sys.exit(1)
 else:
     report_error('unknown command \"%s\"\n' % command)
     sys.exit(1)
