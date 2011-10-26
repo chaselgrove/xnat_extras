@@ -257,7 +257,6 @@ def do_scan(project_id, subject_id, experiment_id, scan_id, xml_flag):
         info.append(('label', scan.label()))
         info.append(('datatype', scan.datatype()))
         info.append(('experiment', scan.parent().id()))
-#        info.append(('namespaces', scan.namespaces()))
         for r in scan.resources():
             info.append(('resource', r.id()))
         add_attributes(info, scan, scan_attributes)
@@ -300,7 +299,6 @@ def do_reconstruction(project_id,
         info.append(('ID', reconstruction.id()))
         info.append(('datatype', reconstruction.datatype()))
         info.append(('label', reconstruction.label()))
-#        info.append(('namespaces', reconstruction.namespaces()))
         info.append(('experiment', reconstruction.parent().id()))
         for in_res in reconstruction.in_resources():
             info.append(('in_resource', in_res.id()))
@@ -338,7 +336,6 @@ def do_assessor(project_id, subject_id, experiment_id, assessor_id, xml_flag):
         info.append(('ID', assessor.id()))
         info.append(('datatype', assessor.datatype()))
         info.append(('label', assessor.label()))
-        info.append(('namespaces', assessor.namespaces()))
         info.append(('experiment', assessor.parent().id()))
 #        print assessor.resources()
 #        for res in assessor.resources():
@@ -381,9 +378,18 @@ def do_scan_resource(project_id,
     resource = scan.resource(resource_id)
     if not resource.exists():
         fmt = '%s: resource %s for scan %s not found\n'
-        sys.stderr.write(fmt, (progname, resource_id, scan_id))
+        sys.stderr.write(fmt % (progname, resource_id, scan_id))
         return False
-    print dir(resource)
+    info = []
+    info.append(('id', resource.id()))
+    info.append(('label', resource.label()))
+    for f in resource.files():
+        info.append(('%s-id' % f.id(), f.id()))
+        info.append(('%s-label' % f.id(), f.label()))
+        info.append(('%s-format' % f.id(), f.format()))
+        info.append(('%s-content' % f.id(), f.content()))
+        info.append(('%s-size' % f.id(), f.size()))
+    print_table(info)
     return True
 
 progname = os.path.basename(sys.argv[0])
@@ -594,7 +600,7 @@ elif command == 'scan_resource':
     if len(args) < 4:
         report_error('not enough arguments to "scan_resource"')
         sys.exit(1)
-    if not do_scan_resource(args[0], args[1], args[2], args[3], args[4])
+    if not do_scan_resource(args[0], args[1], args[2], args[3], args[4]):
         sys.exit(1)
 else:
     report_error('unknown command \"%s\"\n' % command)
