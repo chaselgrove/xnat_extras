@@ -298,9 +298,6 @@ def dump_assessor(assessor, xml_flag):
         info.append(('datatype', assessor.datatype()))
         info.append(('label', assessor.label()))
         info.append(('experiment', assessor.parent().id()))
-#        print assessor.resources()
-#        for res in assessor.resources():
-#            info.append(('resource', res))
         for in_res in assessor.in_resources():
             info.append(('in_resource', in_res.id()))
         for out_res in assessor.out_resources():
