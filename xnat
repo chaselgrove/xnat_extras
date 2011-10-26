@@ -119,35 +119,6 @@ def do_projects():
     print_table(info)
     return True
 
-def do_subjects(project_id):
-    info = []
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    for s in project.subjects():
-        info.append(s.attrs.mget(('ID', 'label')))
-    print_table(info)
-    return True
-
-def do_experiments(project_id, subject_id):
-    info = []
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    for e in subject.experiments():
-        info.append((e.id(), e.label()))
-    print_table(info)
-    return True
-
 def add_attributes(info, object, attr_names):
     attr_values = object.attrs.mget(attr_names)
     info.extend(zip(attr_names, attr_values))
@@ -433,8 +404,6 @@ if len(sys.argv) == 1:
     print 'commands are:'
     print
     print '    projects'
-    print '    subjects <project>'
-    print '    experiments <project> <subject>'
     print '    project [-x|--xml] <project>'
     print '    subject [-x|--xml] <project> <subject>'
     print '    experiment [-x|--xml] <project> <subject> <experiment>'
@@ -495,18 +464,6 @@ else:
 
 if command == 'projects':
     if not do_projects():
-        sys.exit(1)
-elif command == 'subjects':
-    if len(args) != 1:
-        report_error('missing argument to "subjects"')
-        sys.exit(1)
-    if not do_subjects(args[0]):
-        sys.exit(1)
-elif command == 'experiments':
-    if len(args) != 2:
-        report_error('not enough arguments to "experiments"')
-        sys.exit(1)
-    if not do_experiments(args[0], args[1]):
         sys.exit(1)
 elif command == 'project':
     xml_flag = False
