@@ -353,6 +353,39 @@ def do_assessor(project_id, subject_id, experiment_id, assessor_id, xml_flag):
         print_table(info)
     return True
 
+def do_scan_resource(project_id, 
+                     subject_id, 
+                     experiment_id, 
+                     scan_id, 
+                     resource_id):
+    project = interface.select.project(project_id)
+    if not project.exists():
+        msg = '%s: project %s not found\n' % (progname, project_id)
+        sys.stderr.write(msg)
+        return False
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, project_id, subject_id))
+        return False
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        return False
+    scan = experiment.scan(scan_id)
+    if not scan.exists():
+        fmt = '%s: scan %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, scan_id, experiment_id))
+        return False
+    resource = scan.resource(resource_id)
+    if not resource.exists():
+        fmt = '%s: resource %s for scan %s not found\n'
+        sys.stderr.write(fmt, (progname, resource_id, scan_id))
+        return False
+    print dir(resource)
+    return True
+
 progname = os.path.basename(sys.argv[0])
 
 try:
@@ -410,6 +443,8 @@ if len(sys.argv) == 1:
     print '    scan [-x|--xml] <project> <subject> <experiment> <scan>'
     print '    reconstruction [-x|--xml] <project> <subject> <experiment> <reconstruction>'
     print '    assessor [-x|--xml] <project> <subject> <experiment> <assessor>'
+    print
+    print '    scan_resource <project> <subject> <experiment> <scan> <resource>'
     print
     sys.exit(1)
 
@@ -554,6 +589,12 @@ elif command == 'assessor':
         report_error('not enough arguments to "assessor"')
         sys.exit(1)
     if not do_assessor(args2[0], args2[1], args2[2], args2[3], xml_flag):
+        sys.exit(1)
+elif command == 'scan_resource':
+    if len(args) < 4:
+        report_error('not enough arguments to "scan_resource"')
+        sys.exit(1)
+    if not do_scan_resource(args[0], args[1], args[2], args[3], args[4])
         sys.exit(1)
 else:
     report_error('unknown command \"%s\"\n' % command)
