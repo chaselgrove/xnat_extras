@@ -407,9 +407,9 @@ if len(sys.argv) == 1:
     print '    project [-x|--xml] <project>'
     print '    subject [-x|--xml] <project> <subject>'
     print '    experiment [-x|--xml] <project> <subject> <experiment>'
-    print '    scan [-x|--xml] <project> <subject> <experiment>'
-    print '    reconstruction [-x|--xml] <project> <subject> <experiment>'
-    print '    assessor [-x|--xml] <project> <subject> <experiment>'
+    print '    scan [-x|--xml] <project> <subject> <experiment> <scan>'
+    print '    reconstruction [-x|--xml] <project> <subject> <experiment> <reconstruction>'
+    print '    assessor [-x|--xml] <project> <subject> <experiment> <assessor>'
     print
     sys.exit(1)
 
