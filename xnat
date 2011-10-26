@@ -112,24 +112,75 @@ def print_table(rows, indent=''):
         print indent + '  '.join(parts)
     return
 
-def do_projects():
-    info = []
-    for p in interface.select.projects():
-        info.append(p.attrs.mget(('ID', 'secondary_ID', 'name')))
-    print_table(info)
-    return True
-
 def add_attributes(info, object, attr_names):
     attr_values = object.attrs.mget(attr_names)
     info.extend(zip(attr_names, attr_values))
     return
 
-def do_project(project_id, xml_flag):
+def get_project(project_id):
     project = interface.select.project(project_id)
     if not project.exists():
         msg = '%s: project %s not found\n' % (progname, project_id)
         sys.stderr.write(msg)
-        return False
+        raise ValueError
+    return project
+
+def get_subject(project_id, subject_id):
+    project = get_project(project_id)
+    subject = project.subject(subject_id)
+    if not subject.exists():
+        fmt = '%s: subject %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, subject_id, project_id))
+        raise ValueError
+    return subject
+
+def get_experiment(project_id, subject_id, experiment_id):
+    subject = get_subject(project_id, subject_id)
+    experiment = subject.experiment(experiment_id)
+    if not experiment.exists():
+        fmt = '%s: experiment %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
+        raise ValueError
+    return experiment
+
+def get_scan(project_id, subject_id, experiment_id, scan_id):
+    experiment = get_experiment(project_id, subject_id, experiment_id)
+    scan = experiment.scan(scan_id)
+    if not scan.exists():
+        fmt = '%s: scan %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, scan_id, experiment_id))
+        raise ValueError
+    return scan
+
+def get_reconstruction(project_id, 
+                       subject_id, 
+                       experiment_id, 
+                       reconstruction_id):
+    experiment = get_experiment(project_id, subject_id, experiment_id)
+    reconstruction = experiment.reconstruction(reconstruction_id)
+    if not reconstruction.exists():
+        fmt = '%s: reconstruction %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, reconstruction_id, experiment_id))
+        raise ValueError
+    return reconstruction
+
+def get_assessor(project_id, subject_id, experiment_id, assessor_id):
+    experiment = get_experiment(project_id, subject_id, experiment_id)
+    assessor = experiment.assessor(assessor_id)
+    if not assessor.exists():
+        fmt = '%s: assessor %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, assessor_id, experiment_id))
+        raise ValueError
+    return assessor
+
+def dump_projects():
+    info = []
+    for p in interface.select.projects():
+        info.append(p.attrs.mget(('ID', 'secondary_ID')))
+    print_table(info)
+    return True
+
+def dump_project(project, xml_flag):
     if xml_flag:
         print project.get()
     else:
@@ -155,19 +206,9 @@ def do_project(project_id, xml_flag):
             info.append(('subject', s.id()))
         add_attributes(info, project, project_attributes)
         print_table(info)
-    return True
+    return
 
-def do_subject(project_id, subject_id, xml_flag):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, subject_id, project_id))
-        return False
+def dump_subject(subject, xml_flag):
     if xml_flag:
         print subject.get()
     else:
@@ -184,24 +225,9 @@ def do_subject(project_id, subject_id, xml_flag):
             info.append(('resource', r.id()))
         add_attributes(info, subject, subject_attributes)
         print_table(info)
-    return True
+    return
 
-def do_experiment(project_id, subject_id, experiment_id, xml_flag):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    experiment = subject.experiment(experiment_id)
-    if not experiment.exists():
-        fmt = '%s: experiment %s for subject %s not found\n'
-        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
-        return False
+def dump_experiment(experiment, xml_flag):
     if xml_flag:
         print experiment.get()
     else:
@@ -226,29 +252,9 @@ def do_experiment(project_id, subject_id, experiment_id, xml_flag):
         if experiment.datatype() == 'xnat:petSessionData':
             add_attributes(info, experiment, pet_session_attributes)
         print_table(info)
-    return True
+    return
 
-def do_scan(project_id, subject_id, experiment_id, scan_id, xml_flag):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    experiment = subject.experiment(experiment_id)
-    if not experiment.exists():
-        fmt = '%s: experiment %s for subject %s not found\n'
-        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
-        return False
-    scan = experiment.scan(scan_id)
-    if not scan.exists():
-        fmt = '%s: scan %s for experiment %s not found\n'
-        sys.stderr.write(fmt % (progname, scan_id, experiment_id))
-        return False
+def dump_scan(scan, xml_flag):
     if xml_flag:
         print scan.get()
     else:
@@ -265,33 +271,9 @@ def do_scan(project_id, subject_id, experiment_id, scan_id, xml_flag):
         if scan.datatype() == 'xnat:petScanData':
             add_attributes(info, scan, pet_scan_attributes)
         print_table(info)
-    return True
+    return
 
-def do_reconstruction(project_id, 
-                      subject_id, 
-                      experiment_id, 
-                      reconstruction_id, 
-                      xml_flag):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    experiment = subject.experiment(experiment_id)
-    if not experiment.exists():
-        fmt = '%s: experiment %s for subject %s not found\n'
-        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
-        return False
-    reconstruction = experiment.reconstruction(reconstruction_id)
-    if not reconstruction.exists():
-        fmt = '%s: reconstruction %s for experiment %s not found\n'
-        sys.stderr.write(fmt % (progname, reconstruction_id, experiment_id))
-        return False
+def dump_reconstruction(reconstruction, xml_flag):
     if xml_flag:
         print reconstruction.get()
     else:
@@ -306,29 +288,9 @@ def do_reconstruction(project_id,
             info.append(('out_resource', out_res.id()))
         add_attributes(info, reconstruction, reconstruction_attributes)
         print_table(info)
-    return True
+    return
 
-def do_assessor(project_id, subject_id, experiment_id, assessor_id, xml_flag):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    experiment = subject.experiment(experiment_id)
-    if not experiment.exists():
-        fmt = '%s: experiment %s for subject %s not found\n'
-        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
-        return False
-    assessor = experiment.assessor(assessor_id)
-    if not assessor.exists():
-        fmt = '%s: assessor %s for experiment %s not found\n'
-        sys.stderr.write(fmt % (progname, assessor_id, experiment_id))
-        return False
+def dump_assessor(assessor, xml_flag):
     if xml_flag:
         print assessor.get()
     else:
@@ -348,7 +310,7 @@ def do_assessor(project_id, subject_id, experiment_id, assessor_id, xml_flag):
             info.append(('share', s.id()))
         add_attributes(info, assessor, assessor_attributes)
         print_table(info)
-    return True
+    return
 
 def do_scan_resource(project_id, 
                      subject_id, 
@@ -504,7 +466,7 @@ else:
     interface = pyxnat.Interface(server=host, anonymous=True)
 
 if command == 'projects':
-    if not do_projects():
+    if not dump_projects():
         sys.exit(1)
 elif command == 'project':
     xml_flag = False
@@ -519,8 +481,11 @@ elif command == 'project':
     if not args2:
         report_error('no project given')
         sys.exit(1)
-    if not do_project(args2[0], xml_flag):
+    try:
+        project = get_project(args2[0])
+    except ValueError:
         sys.exit(1)
+    dump_project(project, xml_flag)
 elif command == 'subject':
     xml_flag = False
     try:
@@ -534,8 +499,11 @@ elif command == 'subject':
     if len(args2) < 2:
         report_error('not enough arguments to "subject"')
         sys.exit(1)
-    if not do_subject(args2[0], args2[1], xml_flag):
+    try:
+        subject = get_subject(args2[0], args2[1])
+    except ValueError:
         sys.exit(1)
+    dump_subject(subject, xml_flag)
 elif command == 'experiment':
     xml_flag = False
     try:
@@ -549,8 +517,11 @@ elif command == 'experiment':
     if len(args2) < 3:
         report_error('not enough arguments to "experiment"')
         sys.exit(1)
-    if not do_experiment(args2[0], args2[1], args2[2], xml_flag):
+    try:
+        experiment = get_experiment(args2[0], args2[1], args2[2])
+    except ValueError:
         sys.exit(1)
+    dump_experiment(experiment, xml_flag)
 elif command == 'scan':
     xml_flag = False
     try:
@@ -564,8 +535,11 @@ elif command == 'scan':
     if len(args2) < 4:
         report_error('not enough arguments to "scan"')
         sys.exit(1)
-    if not do_scan(args2[0], args2[1], args2[2], args2[3], xml_flag):
+    try:
+        scan = get_scan(args2[0], args2[1], args2[2], args2[3])
+    except:
         sys.exit(1)
+    dump_scan(scan, xml_flag)
 elif command == 'reconstruction':
     xml_flag = False
     try:
@@ -579,8 +553,11 @@ elif command == 'reconstruction':
     if len(args2) < 4:
         report_error('not enough arguments to "reconstruction"')
         sys.exit(1)
-    if not do_reconstruction(args2[0], args2[1], args2[2], args2[3], xml_flag):
+    try:
+        reconstruction = get_reconstruction(args2[0], args2[1], args2[2], args2[3])
+    except ValueError:
         sys.exit(1)
+    dump_reconstruction(reconstruction, xml_flag)
 elif command == 'assessor':
     xml_flag = False
     try:
@@ -594,8 +571,11 @@ elif command == 'assessor':
     if len(args2) < 4:
         report_error('not enough arguments to "assessor"')
         sys.exit(1)
-    if not do_assessor(args2[0], args2[1], args2[2], args2[3], xml_flag):
+    try:
+        assessor = get_assessor(args2[0], args2[1], args2[2], args2[3])
+    except ValueError:
         sys.exit(1)
+    dump_assessor(assessor, xml_flag)
 elif command == 'scan_resource':
     if len(args) < 4:
         report_error('not enough arguments to "scan_resource"')
