@@ -43,18 +43,20 @@ experiment_attributes = ('visit_id',
                          'last_modified', 
                          'insert_date', 
                          'insert_user', 
-                         'scanner', 
-                         'dcmAccessionNumber', 
-                         'dcmPatientId', 
-                         'dcmPatientName', 
-                         'session_type', 
-                         'modality', 
-                         'UID', 
                          'last_modified', 
                          'insert_date', 
                          'insert_user')
 
+image_session_attributes = ('scanner', 
+                            'dcmAccessionNumber', 
+                            'dcmPatientId', 
+                            'dcmPatientName', 
+                            'session_type', 
+                            'modality', 
+                            'UID')
+
 mr_session_attributes = ()
+
 pet_session_attributes = ()
 
 scan_attributes = ('type', 
@@ -243,8 +245,10 @@ def dump_experiment(experiment, xml_flag):
             info.append(('share', s.id()))
         add_attributes(info, experiment, experiment_attributes)
         if experiment.datatype() == 'xnat:mrSessionData':
+            add_attributes(info, experiment, image_session_attributes)
             add_attributes(info, experiment, mr_session_attributes)
         if experiment.datatype() == 'xnat:petSessionData':
+            add_attributes(info, experiment, image_session_attributes)
             add_attributes(info, experiment, pet_session_attributes)
         print_table(info)
     return
