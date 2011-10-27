@@ -121,6 +121,16 @@ def add_provenance(info, object):
             info.append(('provenance-%d-%s' % (i, key), value))
     return
 
+def add_resources(info, resources, label):
+    for r in resources:
+        n_files = len([ f for f in r.files() ])
+        if r.label():
+            value = '%s (%d): %s' % (r.id(), n_files, r.label())
+        else:
+            value = '%s (%d)' % (r.id(), n_files)
+        info.append((label, value))
+    return
+
 def get_project(project_id):
     project = interface.select.project(project_id)
     if not project.exists():
@@ -204,8 +214,7 @@ def dump_project(project, xml_flag):
         info.append(('current_arc', project.current_arc()))
         info.append(('prearchive_code', project.prearchive_code()))
         info.append(('quarantine_code', project.quarantine_code()))
-        for r in project.resources():
-            info.append(('resource', r.id()))
+        add_resources(info, project.resources(), 'resource')
         for s in project.subjects():
             info.append(('subject', s.id()))
         add_attributes(info, project, project_attributes)
@@ -225,8 +234,7 @@ def dump_subject(subject, xml_flag):
             info.append(('share', s.id()))
         for e in subject.experiments():
             info.append(('experiment', e.id()))
-        for r in subject.resources():
-            info.append(('resource', r.id()))
+        add_resources(info, subject.resources(), 'resource')
         add_attributes(info, subject, subject_attributes)
         print_table(info)
     return
@@ -244,8 +252,7 @@ def dump_experiment(experiment, xml_flag):
             info.append(('assessor', a.id()))
         for r in experiment.reconstructions():
             info.append(('reconstruction', r.id()))
-        for r in experiment.resources():
-            info.append(('resource', r.id()))
+        add_resources(info, experiment.resources(), 'resource')
         for s in experiment.scans():
             info.append(('scan', s.id()))
         for s in experiment.shares():
@@ -269,8 +276,7 @@ def dump_scan(scan, xml_flag):
         info.append(('label', scan.label()))
         info.append(('datatype', scan.datatype()))
         info.append(('experiment', scan.parent().id()))
-        for r in scan.resources():
-            info.append(('resource', r.id()))
+        add_resources(info, scan.resources(), 'resource')
         add_attributes(info, scan, scan_attributes)
         if scan.datatype() == 'xnat:mrScanData':
             add_attributes(info, scan, mr_scan_attributes)
@@ -288,10 +294,8 @@ def dump_reconstruction(reconstruction, xml_flag):
         info.append(('datatype', reconstruction.datatype()))
         info.append(('label', reconstruction.label()))
         info.append(('experiment', reconstruction.parent().id()))
-        for in_res in reconstruction.in_resources():
-            info.append(('in_resource', in_res.id()))
-        for out_res in reconstruction.out_resources():
-            info.append(('out_resource', out_res.id()))
+        add_resources(info, reconstruction.in_resources(), 'in_resource')
+        add_resources(info, reconstruction.out_resources(), 'out_resource')
         add_attributes(info, reconstruction, reconstruction_attributes)
         add_provenance(info, reconstruction)
         print_table(info)
@@ -306,10 +310,8 @@ def dump_assessor(assessor, xml_flag):
         info.append(('datatype', assessor.datatype()))
         info.append(('label', assessor.label()))
         info.append(('experiment', assessor.parent().id()))
-        for in_res in assessor.in_resources():
-            info.append(('in_resource', in_res.id()))
-        for out_res in assessor.out_resources():
-            info.append(('out_resource', out_res.id()))
+        add_resources(info, assessor.in_resources(), 'in_resource')
+        add_resources(info, assessor.out_resources(), 'out_resource')
         for s in assessor.shares():
             info.append(('share', s.id()))
         add_attributes(info, assessor, assessor_attributes)
