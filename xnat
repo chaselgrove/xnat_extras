@@ -114,6 +114,13 @@ def add_attributes(info, object, attr_names):
     info.extend(zip(attr_names, attr_values))
     return
 
+def add_provenance(info, object):
+    provenance = object.provenance.get()
+    for (i, p) in enumerate(provenance):
+        for (key, value) in p.iteritems():
+            info.append(('provenance-%d-%s' % (i, key), value))
+    return
+
 def get_project(project_id):
     project = interface.select.project(project_id)
     if not project.exists():
@@ -286,6 +293,7 @@ def dump_reconstruction(reconstruction, xml_flag):
         for out_res in reconstruction.out_resources():
             info.append(('out_resource', out_res.id()))
         add_attributes(info, reconstruction, reconstruction_attributes)
+        add_provenance(info, reconstruction)
         print_table(info)
     return
 
@@ -305,6 +313,7 @@ def dump_assessor(assessor, xml_flag):
         for s in assessor.shares():
             info.append(('share', s.id()))
         add_attributes(info, assessor, assessor_attributes)
+        add_provenance(info, assessor)
         print_table(info)
     return
 
