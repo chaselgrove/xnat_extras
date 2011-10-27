@@ -319,36 +319,7 @@ def dump_assessor(assessor, xml_flag):
         print_table(info)
     return
 
-def do_scan_resource(project_id, 
-                     subject_id, 
-                     experiment_id, 
-                     scan_id, 
-                     resource_id):
-    project = interface.select.project(project_id)
-    if not project.exists():
-        msg = '%s: project %s not found\n' % (progname, project_id)
-        sys.stderr.write(msg)
-        return False
-    subject = project.subject(subject_id)
-    if not subject.exists():
-        fmt = '%s: subject %s for project %s not found\n'
-        sys.stderr.write(fmt % (progname, project_id, subject_id))
-        return False
-    experiment = subject.experiment(experiment_id)
-    if not experiment.exists():
-        fmt = '%s: experiment %s for subject %s not found\n'
-        sys.stderr.write(fmt % (progname, experiment_id, subject_id))
-        return False
-    scan = experiment.scan(scan_id)
-    if not scan.exists():
-        fmt = '%s: scan %s for experiment %s not found\n'
-        sys.stderr.write(fmt % (progname, scan_id, experiment_id))
-        return False
-    resource = scan.resource(resource_id)
-    if not resource.exists():
-        fmt = '%s: resource %s for scan %s not found\n'
-        sys.stderr.write(fmt % (progname, resource_id, scan_id))
-        return False
+def dump_resource(resource):
     info = []
     info.append(('id', resource.id()))
     info.append(('label', resource.label()))
@@ -418,7 +389,12 @@ if len(sys.argv) == 1:
     print '    reconstruction [-x|--xml] <project> <subject> <experiment> <reconstruction>'
     print '    assessor [-x|--xml] <project> <subject> <experiment> <assessor>'
     print
+    print '    project_resource <project> <resource>'
+    print '    subject_resource <project> <subject> <resource>'
+    print '    experiment_resource <project> <subject> <experiment> <resource>'
     print '    scan_resource <project> <subject> <experiment> <scan> <resource>'
+    print '    reconstruction_resource <project> <subject> <experiment> <reconstruction> <resource>'
+    print '    assessor_resource <project> <subject> <experiment> <assessor> <resource>'
     print
     sys.exit(1)
 
@@ -579,12 +555,94 @@ elif command == 'assessor':
     except ValueError:
         sys.exit(1)
     dump_assessor(assessor, xml_flag)
+elif command == 'project_resource':
+    if len(args) < 2:
+        report_error('not enough arguments to "project_resource"')
+        sys.exit(1)
+    try:
+        project = get_project(args[0])
+    except ValueError:
+        sys.exit(1)
+    r = project.resource(args[1])
+    if not r.exists():
+        fmt = '%s: resource %s for project %s not found\n'
+        sys.stderr.write(fmt % (progname, args[1], args[0]))
+        sys.exit(1)
+    dump_resource(r)
+elif command == 'subject_resource':
+    if len(args) < 3:
+        report_error('not enough arguments to "subject_resource"')
+        sys.exit(1)
+    try:
+        subject = get_subject(args[0], args[1])
+    except ValueError:
+        sys.exit(1)
+    r = subject.resource(args[2])
+    if not r.exists():
+        fmt = '%s: resource %s for subject %s not found\n'
+        sys.stderr.write(fmt % (progname, args[2], args[1]))
+        sys.exit(1)
+    dump_resource(r)
+elif command == 'experiment_resource':
+    if len(args) < 4:
+        report_error('not enough arguments to "experiment_resource"')
+        sys.exit(1)
+    try:
+        experiment = get_experiment(args[0], args[1], args[2])
+    except ValueError:
+        sys.exit(1)
+    r = experiment.resource(args[3])
+    if not r.exists():
+        fmt = '%s: resource %s for experiment %s not found\n'
+        sys.stderr.write(fmt % (progname, args[3], args[2]))
+        sys.exit(1)
+    dump_resource(r)
 elif command == 'scan_resource':
     if len(args) < 4:
         report_error('not enough arguments to "scan_resource"')
         sys.exit(1)
-    if not do_scan_resource(args[0], args[1], args[2], args[3], args[4]):
+    try:
+        scan = get_scan(args[0], args[1], args[2], args[3])
+    except ValueError:
         sys.exit(1)
+    r = scan.resource(args[4])
+    if not r.exists():
+        fmt = '%s: resource %s for scan %s not found\n'
+        sys.stderr.write(fmt % (progname, args[4], args[3]))
+        sys.exit(1)
+    dump_resource(r)
+elif command == 'reconstruction_resource':
+    if len(args) < 5:
+        report_error('not enough arguments to "reconstruction_resource"')
+        sys.exit(1)
+    try:
+        reconstruction = get_reconstruction(args[0], args[1], args[2], args[3])
+    except ValueError:
+        sys.exit(1)
+    r = reconstruction.in_resource(args[4])
+    if not r.exists():
+        r = reconstruction.out_resource(args[4])
+    if not r.exists():
+        fmt = '%s: resource %s for reconstruction %s not found\n'
+        sys.stderr.write(fmt % (progname, args[4], args[3]))
+        sys.exit(1)
+    dump_resource(r)
+elif command == 'assessor_resource':
+    if len(args) < 5:
+        report_error('not enough arguments to "assessor_resource"')
+        sys.exit(1)
+    try:
+        assessor = get_assessor(args[0], args[1], args[2], args[3])
+    except ValueError:
+        sys.exit(1)
+    r = assessor.in_resource(args[4])
+    if not r.exists():
+        r = assessor.out_resource(args[4])
+    if not r.exists():
+        fmt = '%s: resource %s for assessor %s not found\n'
+        sys.stderr.write(fmt % (progname, args[4], args[3]))
+        sys.exit(1)
+    dump_resource(r)
 else:
     report_error('unknown command \"%s\"\n' % command)
     sys.exit(1)
