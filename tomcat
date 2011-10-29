@@ -1,0 +1,105 @@
+#! /bin/sh
+
+# Copyright 2011 Christian Haselgrove
+# Licensed under the BSD License: http://www.opensource.org/licenses/bsd-license.php
+
+### BEGIN INIT INFO
+# Provides:          tomcat
+# Required-Start:    $local_fs $remote_fs $network $postgresql
+# Required-Stop:     $local_fs $remote_fs $network $postgresql
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Tomcat
+### END INIT INFO
+
+# Author: Christian Haselgrove
+
+. /lib/lsb/init-functions
+
+CATALINA_PID=/var/run/xnat/catalina.pid
+
+do_start()
+{
+	# Return
+	#   0 if daemon has been started
+	#   1 if daemon was already running
+	#   2 if daemon could not be started
+	sudo -i -u vmuser /usr/local/tomcat/bin/startup.sh || return 2
+	return 0
+}
+
+do_stop()
+{
+	# Return
+	#   0 if daemon has been stopped
+	#   1 if daemon was already stopped
+	#   2 if daemon could not be stopped
+	#   other if a failure occurred
+	sudo -i -u vmuser /usr/local/tomcat/bin/shutdown.sh || return 2
+	sleep 3
+	return 0
+}
+
+
+case "$1" in
+  start)
+	[ "$VERBOSE" != no ] && log_daemon_msg "Starting tomcat"
+	do_start
+	case "$?" in
+		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+	esac
+	;;
+  stop)
+	[ "$VERBOSE" != no ] && log_daemon_msg "Stopping tomcat"
+	do_stop
+	case "$?" in
+		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+	esac
+	;;
+  restart|force-reload)
+	#
+	# If the "reload" option is implemented then remove the
+	# 'force-reload' alias
+	#
+	log_daemon_msg "Restarting tomcat"
+	do_stop
+	case "$?" in
+	  0|1)
+		do_start
+		case "$?" in
+			0) log_end_msg 0 ;;
+			1) log_end_msg 1 ;; # Old process is still running
+			*) log_end_msg 1 ;; # Failed to start
+		esac
+		;;
+	  *)
+	  	# Failed to stop
+		log_end_msg 1
+		;;
+	esac
+	;;
+  status)
+	if [ -f $CATALINA_PID ]
+	then
+		pid=`cat $CATALINA_PID`
+		if ps -p $pid > /dev/null 2>&1
+		then
+			echo "tomcat is running (PID $pid)"
+		else
+			echo "tomcat: PID file exists but PID $pid is not running"
+		fi
+	else
+		echo "tomcat is not running"
+	fi
+	;;
+  *)
+	echo "Usage: tomcat {start|stop|restart|status}" >&2
+	exit 3
+	;;
+esac
+
+:
+
+# eof
