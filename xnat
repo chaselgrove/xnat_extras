@@ -42,7 +42,6 @@ experiment_attributes = ('visit_id',
                          'validation_notes', 
                          'last_modified', 
                          'insert_date', 
-                         'insert_user', 
                          'last_modified', 
                          'insert_date', 
                          'insert_user')
