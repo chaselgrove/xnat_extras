@@ -1,0 +1,464 @@
+#!/usr/bin/python
+
+# Copyright (c) 2011 Christian Haselgrove
+# BSD License: http://www.opensource.org/licenses/bsd-license.php
+
+import sys
+import os
+import datetime
+import dateutil.parser
+import pyxnat
+
+def command_line_error(msg):
+    sys.stderr.write('%s: %s\n' % (progname, msg))
+    sys.stderr.write('run %s with no arguments for usage\n' % progname)
+    return
+
+def write_rc(xnat_uri, resource_uri, files):
+    fo = open('.xnat', 'w')
+    fo.write('%s\n' % xnat_uri)
+    fo.write('%s\n' % resource_uri)
+    fo.write('%s\n' % datetime.datetime.now().strftime('%s'))
+    for path in sorted(files):
+        times = files[path]
+        fo.write('%d %d %s\n' % (times['t_local'], times['t_remote'], path))
+    fo.close()
+    return
+
+def read_rc():
+    fo = open('.xnat')
+    xnat_uri = fo.readline().strip()
+    resource_uri = fo.readline().strip()
+    last_updated = int(fo.readline().strip())
+    files = {}
+    for line in fo:
+        (t_local, t_remote, path) = line.strip('\n').split(' ', 2)
+        files[path] = {'t_remote': int(t_remote), 't_local': int(t_local)}
+    fo.close()
+    return (xnat_uri, resource_uri, last_updated, files)
+
+def get_statuses(rc_files, resource):
+    all_files = set(rc_files)
+    remote_files = {}
+    for f in resource.files():
+        path = f.attributes()['path']
+        t_remote = int(dateutil.parser.parse(f.last_modified()).strftime('%s'))
+        remote_files[path] = t_remote
+        all_files.add(path)
+    local_files = {}
+    for (dirpath, dirnames, filenames) in os.walk('.'):
+        for filename in filenames:
+            path = '%s/%s' % (dirpath, filename)
+            # remote initial './'
+            path = path[2:]
+            if path == '.xnat':
+                continue
+            local_files[path] = int(os.stat(path).st_mtime)
+            all_files.add(path)
+    statuses = {}
+    for path in sorted(all_files):
+        if path not in rc_files:
+            if path in local_files:
+                local_code = 'N'
+            else:
+                local_code = ' '
+        elif path not in local_files:
+            local_code = 'D'
+        elif local_files[path] == rc_files[path]['t_local']:
+            local_code = 'U'
+        elif local_files[path] > rc_files[path]['t_local']:
+            local_code = 'M'
+        else:
+            local_code = '?'
+        if path not in rc_files:
+            if path in remote_files:
+                remote_code = 'N'
+            else:
+                remote_code = ' '
+        elif path not in remote_files:
+            remote_code = 'D'
+        elif remote_files[path] == rc_files[path]['t_remote']:
+            remote_code = 'U'
+        elif remote_files[path] > rc_files[path]['t_remote']:
+            remote_code = 'M'
+        else:
+            remote_code = '?'
+        statuses[path] = {'local': local_code, 'remote': remote_code}
+    return statuses
+
+def files_times(path, f):
+    t_local = int(os.stat(path).st_mtime)
+    t_remote = int(dateutil.parser.parse(f.last_modified()).strftime('%s'))
+    return {'t_remote': t_remote, 't_local': t_local}
+
+progname = os.path.basename(sys.argv.pop(0))
+
+if not sys.argv:
+    print
+    print 'usage: %s [-s] command [command arguments ...]' % progname
+    print
+    print 'XNAT_USER and XNAT_PASSWORD must be defined in the environment'
+    print
+    print 'options are:'
+    print
+    print '    -s -- dry run (no actual changes)'
+    print
+    print 'commands and arguments are:'
+    print
+    print '    init <XNAT URI> <resource URI> -- associate with a resource'
+    print
+    print '    status -- give status since last sync'
+    print
+    print '    push [-f] -- (force) push changes to the server'
+    print
+    print '    pull [-f] -- (force) pull changes from the server'
+    print
+    print 'status lines are:'
+    print
+    print '    local_status remote_status path'
+    print
+    print 'status codes are:'
+    print
+    print '    N -- new'
+    print '    U -- unchanged'
+    print '    M -- modified'
+    print '    D -- deleted'
+    print '    ? -- unknown (modification time is before last sync)'
+    print
+    print 'pushes and pulls ignore files with exceptional conditions:'
+    print
+    print '    any "?" status'
+    print '    N status matching U/M/D status'
+    print '    no status matching any but N status'
+    print
+    print 'push/pull updates are performed as follows (source/dest/action):'
+    print
+    print '    N N update if forced'
+    print '    N   update'
+    print '    U M update if forced'
+    print '    U D update if forced'
+    print '    M U update'
+    print '    M M update if forced'
+    print '    M D update if forced'
+    print '    D U update'
+    print '    D M update if forced'
+    print '    D D update'
+    print
+    sys.exit(1)
+
+try:
+    user = os.environ['XNAT_USER']
+except KeyError:
+    command_line_error('XNAT_USER not set')
+    sys.exit(1)
+
+try:
+    password = os.environ['XNAT_PASSWORD']
+except KeyError:
+    command_line_error('XNAT_PASSWORD not set')
+    sys.exit(1)
+
+dry_run_flag = False
+if sys.argv[0] == '-s':
+    dry_run_flag = True
+    sys.argv.pop(0)
+
+if not sys.argv:
+    command_line_error('no command given')
+    sys.exit(1)
+
+command = sys.argv.pop(0)
+
+if command == 'init':
+    try:
+        xnat_uri = sys.argv.pop(0)
+        resource_uri = sys.argv.pop(0)
+    except IndexError:
+        command_line_error('not enough arguments to init')
+        sys.exit(1)
+    if os.listdir('.'):
+        command_line_error('not in an empty directory')
+        sys.exit(1)
+    i = pyxnat.Interface(xnat_uri, user, password)
+    resource = i.select(resource_uri)
+    if not resource.exists():
+        sys.stderr.write("%s: can't find resource\n" % progname)
+        sys.exit(1)
+    files = {}
+    for f in resource.files():
+        path = f.attributes()['path']
+        if dry_run_flag:
+            print 'not getting %s' % path
+            continue
+        print 'getting %s' % path
+        dir = os.path.dirname(path)
+        if dir and not os.path.exists(dir):
+            os.makedirs(dir)
+        f.get(path)
+        files[path] = files_times(path, f)
+    if not dry_run_flag:
+        write_rc(xnat_uri, resource_uri, files)
+elif command == 'status':
+    (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
+    i = pyxnat.Interface(xnat_uri, user, password)
+    resource = i.select(resource_uri)
+    if not resource.exists():
+        sys.stderr.write("%s: can't find resource\n" % progname)
+        sys.exit(1)
+    statuses = get_statuses(rc_files, resource)
+    for path in sorted(statuses):
+        print '%s %s %s' % (statuses[path]['local'], 
+                            statuses[path]['remote'], 
+                            path)
+elif command == 'push':
+    if sys.argv and sys.argv[0] == '-f':
+        force_flag = True
+    else:
+        force_flag = False
+    (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
+    i = pyxnat.Interface(xnat_uri, user, password)
+    resource = i.select(resource_uri)
+    if not resource.exists():
+        sys.stderr.write("%s: can't find resource\n" % progname)
+        sys.exit(1)
+    statuses = get_statuses(rc_files, resource)
+    prunes = []
+    for path in sorted(statuses):
+        if statuses[path]['local'] == '?' or statuses[path]['remote'] == '?':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['local'] == 'N' and statuses[path]['remote'] != ' ':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['remote'] == 'N' and statuses[path]['local'] != ' ':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['local'] == ' ' and statuses[path]['remote'] != 'N':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['remote'] == ' ' and statuses[path]['local'] != 'N':
+            print 'panic: %s' % path
+            prunes.append(path)
+    for path in prunes:
+        del statuses[path]
+    for path in sorted(statuses):
+        if statuses[path]['local'] == 'N':
+            if statuses[path]['remote'] == 'N':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.put(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['remote'] == ' ':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.put(path)
+                    rc_files[path] = files_times(path, f)
+        if statuses[path]['local'] == 'D':
+            if statuses[path]['remote'] == 'D':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.delete()
+                    del rc_files[path]
+            if statuses[path]['remote'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.delete()
+                        del rc_files[path]
+            if statuses[path]['remote'] == 'U':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.delete()
+                    del rc_files[path]
+        if statuses[path]['local'] == 'M':
+            if statuses[path]['remote'] == 'D':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.put(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['remote'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.put(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['remote'] == 'U':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.put(path)
+                    rc_files[path] = files_times(path, f)
+        if statuses[path]['local'] == 'U':
+            if statuses[path]['remote'] == 'D':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.put(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['remote'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.put(path)
+                        rc_files[path] = files_times(path, f)
+    if not dry_run_flag:
+        write_rc(xnat_uri, resource_uri, rc_files)
+elif command == 'pull':
+    if sys.argv and sys.argv[0] == '-f':
+        force_flag = True
+    else:
+        force_flag = False
+    (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
+    i = pyxnat.Interface(xnat_uri, user, password)
+    resource = i.select(resource_uri)
+    if not resource.exists():
+        sys.stderr.write("%s: can't find resource\n" % progname)
+        sys.exit(1)
+    statuses = get_statuses(rc_files, resource)
+    prunes = []
+    for path in sorted(statuses):
+        if statuses[path]['local'] == '?' or statuses[path]['remote'] == '?':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['local'] == 'N' and statuses[path]['remote'] != ' ':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['remote'] == 'N' and statuses[path]['local'] != ' ':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['local'] == ' ' and statuses[path]['remote'] != 'N':
+            print 'panic: %s' % path
+            prunes.append(path)
+        elif statuses[path]['remote'] == ' ' and statuses[path]['local'] != 'N':
+            print 'panic: %s' % path
+            prunes.append(path)
+    for path in prunes:
+        del statuses[path]
+    for path in sorted(statuses):
+        if statuses[path]['remote'] == 'N':
+            if statuses[path]['local'] == 'N':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.get(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['local'] == ' ':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.get(path)
+                    rc_files[path] = files_times(path, f)
+        if statuses[path]['remote'] == 'D':
+            if statuses[path]['local'] == 'D':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    os.unlink(path)
+                    del rc_files[path]
+            if statuses[path]['local'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        os.unlink(path)
+                        del rc_files[path]
+            if statuses[path]['local'] == 'U':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    os.unlink(path)
+                    del rc_files[path]
+        if statuses[path]['remote'] == 'M':
+            if statuses[path]['local'] == 'D':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.get(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['local'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.get(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['local'] == 'U':
+                if dry_run_flag:
+                    print 'not updating %s' % path
+                else:
+                    print 'updating %s' % path
+                    f = resource.file(path)
+                    f.get(path)
+                    rc_files[path] = files_times(path, f)
+        if statuses[path]['remote'] == 'U':
+            if statuses[path]['local'] == 'D':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.get(path)
+                        rc_files[path] = files_times(path, f)
+            if statuses[path]['local'] == 'M':
+                if force_flag:
+                    if dry_run_flag:
+                        print 'not updating %s' % path
+                    else:
+                        print 'updating %s' % path
+                        f = resource.file(path)
+                        f.get(path)
+                        rc_files[path] = files_times(path, f)
+    if not dry_run_flag:
+        write_rc(xnat_uri, resource_uri, rc_files)
+else:
+    command_line_error('unknown command "%s"' % command)
+    sys.exit(1)
+
+sys.exit(0)
+
+# eof
