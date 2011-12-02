@@ -91,6 +91,11 @@ def files_times(path, f):
     t_remote = int(dateutil.parser.parse(f.last_modified()).strftime('%s'))
     return {'t_remote': t_remote, 't_local': t_local}
 
+def connect(uri, user, password):
+    if user is None:
+        return pyxnat.Interface(uri, anonymous=True)
+    return pyxnat.Interface(uri, user, password)
+
 progname = os.path.basename(sys.argv.pop(0))
 
 if not sys.argv:
@@ -105,7 +110,8 @@ if not sys.argv:
     print
     print 'commands and arguments are:'
     print
-    print '    init <XNAT URI> <resource URI> -- associate with a resource'
+    print '    init [-c] <XNAT URI> <resource URI> -- associate with a resource'
+    print '                                           use -c to create the resource'
     print
     print '    status -- give status since last sync'
     print
@@ -149,14 +155,16 @@ if not sys.argv:
 try:
     user = os.environ['XNAT_USER']
 except KeyError:
-    command_line_error('XNAT_USER not set')
-    sys.exit(1)
-
-try:
-    password = os.environ['XNAT_PASSWORD']
-except KeyError:
-    command_line_error('XNAT_PASSWORD not set')
-    sys.exit(1)
+    print 'XNAT_USER not set, using unauthenticated connection'
+    user = None
+    password = None
+else:
+    try:
+        password = os.environ['XNAT_PASSWORD']
+    except KeyError:
+        print 'XNAT_PASSWORD not set, using unauthenticated connection'
+        user = None
+        password = None
 
 dry_run_flag = False
 if sys.argv[0] == '-s':
@@ -171,36 +179,43 @@ command = sys.argv.pop(0)
 
 if command == 'init':
     try:
+        if sys.argv[0] == '-c':
+            create_flag = True
+            sys.argv.pop(0)
+        else:
+            create_flag = False
         xnat_uri = sys.argv.pop(0)
         resource_uri = sys.argv.pop(0)
     except IndexError:
         command_line_error('not enough arguments to init')
         sys.exit(1)
-    if os.listdir('.'):
-        command_line_error('not in an empty directory')
+    if os.path.exists('.xnat'):
+        sys.stderr.write('%s: .xnat exists, already a sync dir\n' % progname)
         sys.exit(1)
-    i = pyxnat.Interface(xnat_uri, user, password)
+    i = connect(xnat_uri, user, password)
     resource = i.select(resource_uri)
-    if not resource.exists():
-        sys.stderr.write("%s: can't find resource\n" % progname)
-        sys.exit(1)
-    files = {}
-    for f in resource.files():
-        path = f.attributes()['path']
+    if create_flag:
+        if resource.exists():
+            sys.stderr.write('%s: resource exists\n' % progname)
+            sys.exit(1)
         if dry_run_flag:
-            print 'not getting %s' % path
-            continue
-        print 'getting %s' % path
-        dir = os.path.dirname(path)
-        if dir and not os.path.exists(dir):
-            os.makedirs(dir)
-        f.get(path)
-        files[path] = files_times(path, f)
-    if not dry_run_flag:
+            print 'not creating resource'
+        else:
+            print 'creating resource'
+            resource.create()
+    else:
+        if not resource.exists():
+            sys.stderr.write("%s: can't find resource\n" % progname)
+            sys.exit(1)
+    files = {}
+    if dry_run_flag:
+        print 'not writing .xnat'
+    else:
+        print 'writing .xnat'
         write_rc(xnat_uri, resource_uri, files)
 elif command == 'status':
     (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
-    i = pyxnat.Interface(xnat_uri, user, password)
+    i = connect(xnat_uri, user, password)
     resource = i.select(resource_uri)
     if not resource.exists():
         sys.stderr.write("%s: can't find resource\n" % progname)
@@ -216,7 +231,7 @@ elif command == 'push':
     else:
         force_flag = False
     (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
-    i = pyxnat.Interface(xnat_uri, user, password)
+    i = connect(xnat_uri, user, password)
     resource = i.select(resource_uri)
     if not resource.exists():
         sys.stderr.write("%s: can't find resource\n" % progname)
@@ -340,7 +355,7 @@ elif command == 'pull':
     else:
         force_flag = False
     (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
-    i = pyxnat.Interface(xnat_uri, user, password)
+    i = connect(xnat_uri, user, password)
     resource = i.select(resource_uri)
     if not resource.exists():
         sys.stderr.write("%s: can't find resource\n" % progname)
