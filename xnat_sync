@@ -6,6 +6,7 @@
 import sys
 import os
 import datetime
+import getpass
 import dateutil.parser
 import pyxnat
 
@@ -98,25 +99,46 @@ def connect(uri, user, password):
 
 progname = os.path.basename(sys.argv.pop(0))
 
+try:
+    env_user = os.environ['XNAT_USER']
+except KeyError:
+    env_user = None
+
+try:
+    env_password = os.environ['XNAT_PASSWORD']
+except KeyError:
+    env_password = None
+
 if not sys.argv:
     print
-    print 'usage: %s [-s] command [command arguments ...]' % progname
-    print
-    print 'XNAT_USER and XNAT_PASSWORD must be defined in the environment'
+    print 'usage: %s [options] command [command arguments ...]' % progname
     print
     print 'options are:'
     print
     print '    -s -- dry run (no actual changes)'
+    print '    -u <user name> -- XNAT user name'
+    print '    -p <password> -- XNAT password'
+    print '    -n -- use unauthenticated connection'
+    print
+    print 'option values may be given by environment variables:'
+    print
+    if env_user is None:
+        print '    user name: XNAT_USER (not set)'
+    else:
+        print '    user name: XNAT_USER (set to %s)' % env_user
+    if env_password is None:
+        print '    password: XNAT_PASSWORD (not set)'
+    else:
+        print '    password: XNAT_PASSWORD (currently set)'
+    print
+    print 'if none are given, %s will prompt for them' % progname
     print
     print 'commands and arguments are:'
     print
     print '    init [-c] <XNAT URI> <resource URI> -- associate with a resource'
     print '                                           use -c to create the resource'
-    print
     print '    status -- give status since last sync'
-    print
     print '    push [-f] -- (force) push changes to the server'
-    print
     print '    pull [-f] -- (force) pull changes from the server'
     print
     print 'status lines are:'
@@ -152,24 +174,56 @@ if not sys.argv:
     print
     sys.exit(1)
 
-try:
-    user = os.environ['XNAT_USER']
-except KeyError:
-    print 'XNAT_USER not set, using unauthenticated connection'
+dry_run_flag = False
+unauth_flag = False
+cl_user = None
+cl_password = None
+
+while sys.argv:
+    if not sys.argv[0] or sys.argv[0][0] != '-':
+        break
+    if sys.argv[0] == '-s':
+        dry_run_flag = True
+        sys.argv.pop(0)
+        continue
+    if sys.argv[0] == '-n':
+        unauth_flag = True
+        sys.argv.pop(0)
+        continue
+    if sys.argv[0] == '-u':
+        sys.argv.pop(0)
+        if not sys.argv:
+            command_line_error('-u requires an argument')
+            sys.exit(1)
+        cl_user = sys.argv.pop(0)
+        continue
+    if sys.argv[0] == '-p':
+        sys.argv.pop(0)
+        if not sys.argv:
+            command_line_error('-p requires an argument')
+            sys.exit(1)
+        cl_password = sys.argv.pop(0)
+        continue
+
+if unauth_flag:
+    print 'using unauthenticated connection'
     user = None
     password = None
 else:
-    try:
-        password = os.environ['XNAT_PASSWORD']
-    except KeyError:
-        print 'XNAT_PASSWORD not set, using unauthenticated connection'
-        user = None
-        password = None
-
-dry_run_flag = False
-if sys.argv[0] == '-s':
-    dry_run_flag = True
-    sys.argv.pop(0)
+    if cl_user is not None:
+        user = cl_user
+    elif env_user is not None:
+        user = env_user
+    else:
+        sys.stdout.write('User name: ')
+        sys.stdout.flush()
+        user = sys.stdin.readline().strip()
+    if cl_password is not None:
+        password = cl_password
+    elif env_password is not None:
+        password = env_password
+    else:
+        password = getpass.getpass()
 
 if not sys.argv:
     command_line_error('no command given')
