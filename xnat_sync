@@ -109,6 +109,12 @@ try:
 except KeyError:
     env_password = None
 
+dry_run_flag = False
+unauth_flag = False
+cl_user = None
+cl_password = None
+lag = 5
+
 if not sys.argv:
     print
     print 'usage: %s [options] command [command arguments ...]' % progname
@@ -119,6 +125,8 @@ if not sys.argv:
     print '    -u <user name> -- XNAT user name'
     print '    -p <password> -- XNAT password'
     print '    -n -- use unauthenticated connection'
+    print '    -l <time in seconds> -- lag after writing before checking XNAT '
+    print '                            modification time (default %d)' % lag
     print
     print 'option values may be given by environment variables:'
     print
@@ -174,11 +182,6 @@ if not sys.argv:
     print
     sys.exit(1)
 
-dry_run_flag = False
-unauth_flag = False
-cl_user = None
-cl_password = None
-
 while sys.argv:
     if not sys.argv[0] or sys.argv[0][0] != '-':
         break
@@ -204,6 +207,17 @@ while sys.argv:
             sys.exit(1)
         cl_password = sys.argv.pop(0)
         continue
+    if sys.argv[0] == '-l':
+        sys.argv.pop(0)
+        if not sys.argv:
+            command_line_error('-l requires an argument')
+            sys.exit(1)
+        s_lag = sys.argv.pop(0)
+        try:
+            lag = int(lag)
+        except ValueError:
+            command_line_error('bad lag value "%s"' % s_lag)
+            sys.exit(1)
 
 if unauth_flag:
     print 'using unauthenticated connection'
@@ -310,6 +324,7 @@ elif command == 'push':
             prunes.append(path)
     for path in prunes:
         del statuses[path]
+    updates = []
     for path in sorted(statuses):
         if statuses[path]['local'] == 'N':
             if statuses[path]['remote'] == 'N':
@@ -401,7 +416,15 @@ elif command == 'push':
                         f = resource.file(path)
                         f.put(path)
                         rc_files[path] = files_times(path, f)
-    if not dry_run_flag:
+    if not dry_run_flag and updates:
+        for i in xrange(lag):
+            sys.stdout.write('%d...' % (lag-i))
+            sys.stdout.flush()
+            time.sleep(1)
+        print '0'
+        for (path, f) in updates:
+            print 'getting times for %s' % path
+            rc_files[path] = files_times(path, f)
         write_rc(xnat_uri, resource_uri, rc_files)
 elif command == 'pull':
     if sys.argv and sys.argv[0] == '-f':
