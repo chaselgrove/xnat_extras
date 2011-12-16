@@ -201,27 +201,14 @@ def find_resource(object, resource_id):
                     return r
     return None
 
-"""
 def display_parents(object, prefix=''):
-    print object
     prefix = prefix + '    '
     parent = object.parent()
-    print parent.id()
-    print parent._urt
-    if parent._urt == 'assessors':
-        print '%sfor assessor %s' % parent.label()
-    elif parent._urt == 'reconstructions':
-        pass
-    elif parent._urt == 'scans':
-        pass
-    elif parent._urt == 'experiments':
-        pass
-    elif parent._urt == 'subjects':
-        pass
-    else:
-        pass
+    type = parent._urt[:-1]
+    print '%sfor %s %s' % (prefix, type, parent.label())
+    if type != 'project':
+        display_parents(parent, prefix)
     return
-"""
 
 progname = os.path.basename(sys.argv.pop(0))
 
@@ -465,7 +452,7 @@ elif command == 'info':
     dt = datetime.datetime.fromtimestamp(last_updated)
     print 'Last synchronized: %s'  % dt.strftime('%a %b %d %H:%M:%S %Y')
     print 'Resource: %s (%s)' % (resource.label(), resource.id())
-#    display_parents(resource)
+    display_parents(resource)
 elif command == 'push':
     if sys.argv and sys.argv[0] == '-f':
         force_flag = True
