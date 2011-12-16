@@ -62,7 +62,7 @@ def get_statuses(rc_files, resource):
             if path in local_files:
                 local_code = 'N'
             else:
-                local_code = ' '
+                local_code = '-'
         elif path not in local_files:
             local_code = 'D'
         elif local_files[path] == rc_files[path]['t_local']:
@@ -75,7 +75,7 @@ def get_statuses(rc_files, resource):
             if path in remote_files:
                 remote_code = 'N'
             else:
-                remote_code = ' '
+                remote_code = '-'
         elif path not in remote_files:
             remote_code = 'D'
         elif remote_files[path] == rc_files[path]['t_remote']:
@@ -159,28 +159,33 @@ if not sys.argv:
     print '    U -- unchanged'
     print '    M -- modified'
     print '    D -- deleted'
-    print '    ? -- unknown (modification time is before last sync)'
-    print
-    print 'pushes and pulls ignore files with exceptional conditions:'
-    print
-    print '    any "?" status'
-    print '    N status matching U/M/D status'
-    print '    no status matching any but N status'
+    print '    ? -- modification time is before last sync'
+    print '    - -- does not exist (only occurs if the counterpart has status N)'
     print
     print 'push/pull updates are performed as follows (source/dest/action):'
     print
-    print '    N N update if forced'
-    print '    N   update'
-    print '    U M update if forced'
-    print '    U D update if forced'
-    print '    M U update'
-    print '    M M update if forced'
-    print '    M D update if forced'
-    print '    D U update'
-    print '    D M update if forced'
-    print '    D D update'
+    print '    N N   update if forced'
+    print '    N -   update'
+    print '    U MD? update if forced'
+    print '    M U   update'
+    print '    M MD? update if forced'
+    print '    D UD  update'
+    print '    D M?  update if forced'
+    print '    ? UMD update if forced'
+    print '    - N   update if forced'
     print
     sys.exit(1)
+
+"""
+       DEST
+    N U M D ? -
+  N f x x x x u
+S U x   f f f x
+R M x u f f f x
+C D x u f u f x
+  ? x f f f f x
+  - f x x x x x
+"""
 
 while sys.argv:
     if not sys.argv[0] or sys.argv[0][0] != '-':
@@ -305,25 +310,6 @@ elif command == 'push':
         sys.stderr.write("%s: can't find resource\n" % progname)
         sys.exit(1)
     statuses = get_statuses(rc_files, resource)
-    prunes = []
-    for path in sorted(statuses):
-        if statuses[path]['local'] == '?' or statuses[path]['remote'] == '?':
-            print 'panic: %s' % path
-            prunes.append(path)
-        elif statuses[path]['local'] == 'N' and statuses[path]['remote'] != ' ':
-            print 'panic: %s' % path
-            prunes.append(path)
-        elif statuses[path]['remote'] == 'N' and statuses[path]['local'] != ' ':
-            print 'panic: %s' % path
-            prunes.append(path)
-        elif statuses[path]['local'] == ' ' and statuses[path]['remote'] != 'N':
-            print 'panic: %s' % path
-            prunes.append(path)
-        elif statuses[path]['remote'] == ' ' and statuses[path]['local'] != 'N':
-            print 'panic: %s' % path
-            prunes.append(path)
-    for path in prunes:
-        del statuses[path]
     updates = []
     for path in sorted(statuses):
         if statuses[path]['local'] == 'N':
@@ -336,7 +322,7 @@ elif command == 'push':
                         f = resource.file(path)
                         f.put(path)
                         rc_files[path] = files_times(path, f)
-            if statuses[path]['remote'] == ' ':
+            if statuses[path]['remote'] == '-':
                 if dry_run_flag:
                     print 'not updating %s' % path
                 else:
@@ -443,16 +429,16 @@ elif command == 'pull':
         if statuses[path]['local'] == '?' or statuses[path]['remote'] == '?':
             print 'panic: %s' % path
             prunes.append(path)
-        elif statuses[path]['local'] == 'N' and statuses[path]['remote'] != ' ':
+        elif statuses[path]['local'] == 'N' and statuses[path]['remote'] != '-':
             print 'panic: %s' % path
             prunes.append(path)
-        elif statuses[path]['remote'] == 'N' and statuses[path]['local'] != ' ':
+        elif statuses[path]['remote'] == 'N' and statuses[path]['local'] != '-':
             print 'panic: %s' % path
             prunes.append(path)
-        elif statuses[path]['local'] == ' ' and statuses[path]['remote'] != 'N':
+        elif statuses[path]['local'] == '-' and statuses[path]['remote'] != 'N':
             print 'panic: %s' % path
             prunes.append(path)
-        elif statuses[path]['remote'] == ' ' and statuses[path]['local'] != 'N':
+        elif statuses[path]['remote'] == '-' and statuses[path]['local'] != 'N':
             print 'panic: %s' % path
             prunes.append(path)
     for path in prunes:
@@ -468,7 +454,7 @@ elif command == 'pull':
                         f = resource.file(path)
                         f.get(path)
                         rc_files[path] = files_times(path, f)
-            if statuses[path]['local'] == ' ':
+            if statuses[path]['local'] == '-':
                 if dry_run_flag:
                     print 'not updating %s' % path
                 else:
