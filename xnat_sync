@@ -136,9 +136,6 @@ def display_resources(cobject, prefix, res_pre=None):
             print '%s  * Resource %5s: %s (%d files)' % (prefix, r.id(), r.label(), n_files)
         else:
             print '%s  * %s Resource %5s: %s (%d files)' % (prefix, res_pre, r.id(), r.label(), n_files)
-            print r._uri
-            print r._urn
-            print r._urt
 
 def get_object(i, argv):
     """return a pyxnat object given given command line:
@@ -204,6 +201,28 @@ def find_resource(object, resource_id):
                     return r
     return None
 
+"""
+def display_parents(object, prefix=''):
+    print object
+    prefix = prefix + '    '
+    parent = object.parent()
+    print parent.id()
+    print parent._urt
+    if parent._urt == 'assessors':
+        print '%sfor assessor %s' % parent.label()
+    elif parent._urt == 'reconstructions':
+        pass
+    elif parent._urt == 'scans':
+        pass
+    elif parent._urt == 'experiments':
+        pass
+    elif parent._urt == 'subjects':
+        pass
+    else:
+        pass
+    return
+"""
+
 progname = os.path.basename(sys.argv.pop(0))
 
 try:
@@ -255,7 +274,8 @@ if not sys.argv:
     print '    init <XNAT URI> <resource URI> -- associate with a resource'
     print '    init <XNAT URI> <project> [subject [experiment]] <resource ID>'
     print '        -- associate with a resource'
-    print '    status -- give status since last sync'
+    print '    status -- print file-by-file synchronization status'
+    print '    info -- print information about the association'
     print '    push [-f] -- (force) push changes to the server'
     print '    pull [-f] -- (force) pull changes from the server'
     print
@@ -433,6 +453,19 @@ elif command == 'status':
         print '%s %s %s' % (statuses[path]['local'], 
                             statuses[path]['remote'], 
                             path)
+elif command == 'info':
+    (xnat_uri, resource_uri, last_updated, rc_files) = read_rc()
+    i = connect(xnat_uri, user, password)
+    resource = i.select(resource_uri)
+    if not resource.exists():
+        sys.stderr.write("%s: can't find resource\n" % progname)
+        sys.exit(1)
+    print 'Host: %s' % xnat_uri
+    print 'Resource URI: %s' % resource_uri
+    dt = datetime.datetime.fromtimestamp(last_updated)
+    print 'Last synchronized: %s'  % dt.strftime('%a %b %d %H:%M:%S %Y')
+    print 'Resource: %s (%s)' % (resource.label(), resource.id())
+#    display_parents(resource)
 elif command == 'push':
     if sys.argv and sys.argv[0] == '-f':
         force_flag = True
