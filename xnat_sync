@@ -234,7 +234,7 @@ if not sys.argv:
     print
     print 'options are:'
     print
-    print '    -s -- dry run (no actual changes)'
+    print '    -d -- dry run (no actual changes)'
     print '    -u <user name> -- XNAT user name'
     print '    -p <password> -- XNAT password'
     print '    -n -- use unauthenticated connection'
@@ -307,7 +307,7 @@ C D x u f u f x
 while sys.argv:
     if not sys.argv[0] or sys.argv[0][0] != '-':
         break
-    if sys.argv[0] == '-s':
+    if sys.argv[0] == '-d':
         dry_run_flag = True
         sys.argv.pop(0)
         continue
