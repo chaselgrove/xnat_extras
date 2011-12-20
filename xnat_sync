@@ -340,7 +340,11 @@ while sys.argv:
         except ValueError:
             command_line_error('bad lag value "%s"' % s_lag)
             sys.exit(1)
-    command_line_error('%s: unknown option "%s"' % (progname, sys.argv[0]))
+    command_line_error('unknown option "%s"' % sys.argv[0])
+    sys.exit(1)
+
+if not sys.argv:
+    command_line_error('no command given')
     sys.exit(1)
 
 if unauth_flag:
