@@ -5,6 +5,7 @@
 
 import sys
 import os
+import time
 import datetime
 import getpass
 import dateutil.parser
@@ -494,7 +495,7 @@ elif command == 'push':
                         print 'updating %s' % path
                         f = resource.file(path)
                         f.put(path)
-                        rc_files[path] = files_times(path, f)
+                        updates.append((path, f))
             if statuses[path]['remote'] == '-':
                 if dry_run_flag:
                     print 'not updating %s' % path
@@ -502,7 +503,7 @@ elif command == 'push':
                     print 'updating %s' % path
                     f = resource.file(path)
                     f.put(path)
-                    rc_files[path] = files_times(path, f)
+                    updates.append((path, f))
         if statuses[path]['local'] == 'D':
             if statuses[path]['remote'] == 'D':
                 if dry_run_flag:
@@ -538,7 +539,7 @@ elif command == 'push':
                         print 'updating %s' % path
                         f = resource.file(path)
                         f.put(path)
-                        rc_files[path] = files_times(path, f)
+                        updates.append((path, f))
             if statuses[path]['remote'] == 'M':
                 if force_flag:
                     if dry_run_flag:
@@ -547,7 +548,7 @@ elif command == 'push':
                         print 'updating %s' % path
                         f = resource.file(path)
                         f.put(path)
-                        rc_files[path] = files_times(path, f)
+                        updates.append((path, f))
             if statuses[path]['remote'] == 'U':
                 if dry_run_flag:
                     print 'not updating %s' % path
@@ -555,7 +556,7 @@ elif command == 'push':
                     print 'updating %s' % path
                     f = resource.file(path)
                     f.put(path)
-                    rc_files[path] = files_times(path, f)
+                    updates.append((path, f))
         if statuses[path]['local'] == 'U':
             if statuses[path]['remote'] == 'D':
                 if force_flag:
@@ -565,7 +566,7 @@ elif command == 'push':
                         print 'updating %s' % path
                         f = resource.file(path)
                         f.put(path)
-                        rc_files[path] = files_times(path, f)
+                        updates.append((path, f))
             if statuses[path]['remote'] == 'M':
                 if force_flag:
                     if dry_run_flag:
@@ -574,8 +575,13 @@ elif command == 'push':
                         print 'updating %s' % path
                         f = resource.file(path)
                         f.put(path)
-                        rc_files[path] = files_times(path, f)
-    if not dry_run_flag and updates:
+                        updates.append((path, f))
+    if not updates:
+        print 'nothing updated'
+    elif dry_run_flag:
+        print 'not updating .xnat'
+    else:
+        print 'waiting %d seconds...' % lag
         for i in xrange(lag):
             sys.stdout.write('%d...' % (lag-i))
             sys.stdout.flush()
@@ -704,7 +710,10 @@ elif command == 'pull':
                         f = resource.file(path)
                         get_file(f, path)
                         rc_files[path] = files_times(path, f)
-    if not dry_run_flag:
+    if dry_run_flag:
+        print 'not writing .xnat'
+    else:
+        print 'writing .xnat'
         write_rc(xnat_uri, resource_uri, rc_files)
 else:
     command_line_error('unknown command "%s"' % command)
