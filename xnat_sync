@@ -210,6 +210,20 @@ def display_parents(object, prefix=''):
         display_parents(parent, prefix)
     return
 
+def get_file(f, path):
+    "get a file, but first make directories"
+    dirs = []
+    dir = os.path.dirname(path)
+    while dir:
+        dirs.append(dir)
+        dir = os.path.dirname(dir)
+    dirs.reverse()
+    for dir in dirs:
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+    f.get(path)
+    return
+
 progname = os.path.basename(sys.argv.pop(0))
 
 try:
@@ -611,7 +625,7 @@ elif command == 'pull':
                     else:
                         print 'updating %s' % path
                         f = resource.file(path)
-                        f.get(path)
+                        get_file(f, path)
                         rc_files[path] = files_times(path, f)
             if statuses[path]['local'] == '-':
                 if dry_run_flag:
@@ -619,7 +633,7 @@ elif command == 'pull':
                 else:
                     print 'updating %s' % path
                     f = resource.file(path)
-                    f.get(path)
+                    get_file(f, path)
                     rc_files[path] = files_times(path, f)
         if statuses[path]['remote'] == 'D':
             if statuses[path]['local'] == 'D':
@@ -652,7 +666,7 @@ elif command == 'pull':
                     else:
                         print 'updating %s' % path
                         f = resource.file(path)
-                        f.get(path)
+                        get_file(f, path)
                         rc_files[path] = files_times(path, f)
             if statuses[path]['local'] == 'M':
                 if force_flag:
@@ -661,7 +675,7 @@ elif command == 'pull':
                     else:
                         print 'updating %s' % path
                         f = resource.file(path)
-                        f.get(path)
+                        get_file(f, path)
                         rc_files[path] = files_times(path, f)
             if statuses[path]['local'] == 'U':
                 if dry_run_flag:
@@ -669,7 +683,7 @@ elif command == 'pull':
                 else:
                     print 'updating %s' % path
                     f = resource.file(path)
-                    f.get(path)
+                    get_file(f, path)
                     rc_files[path] = files_times(path, f)
         if statuses[path]['remote'] == 'U':
             if statuses[path]['local'] == 'D':
@@ -679,7 +693,7 @@ elif command == 'pull':
                     else:
                         print 'updating %s' % path
                         f = resource.file(path)
-                        f.get(path)
+                        get_file(f, path)
                         rc_files[path] = files_times(path, f)
             if statuses[path]['local'] == 'M':
                 if force_flag:
@@ -688,7 +702,7 @@ elif command == 'pull':
                     else:
                         print 'updating %s' % path
                         f = resource.file(path)
-                        f.get(path)
+                        get_file(f, path)
                         rc_files[path] = files_times(path, f)
     if not dry_run_flag:
         write_rc(xnat_uri, resource_uri, rc_files)
