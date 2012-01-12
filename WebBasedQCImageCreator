@@ -2,6 +2,12 @@
 
 import sys
 import os
+import traceback
+import shutil
+import tempfile
+import StringIO
+import PIL.Image
+import dicom
 import xnat
 
 def command_line_error(msg):
@@ -9,13 +15,46 @@ def command_line_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
+def put_image(im, resource, fname):
+    if fname in resource.files:
+        resource.files[fname].delete()
+    buf = StringIO.StringIO()
+    im.save(buf, format='GIF')
+    resource.create_file(buf.getvalue(), fname)
+    buf.close()
+    return
+
+def create_snapshots(scan, session_id):
+    if 'DICOM' in scan.resources:
+        im = create_from_dicom(scan)
+    else:
+        print 'no DICOM found', scan
+    try:
+        resource = scan.resources['SNAPSHOTS']
+    except KeyError:
+        resource = scan.create_resource('SNAPSHOTS')
+    fname = '%s_%s_qc.gif' % (session_id, scan.id)
+    put_image(im, resource, fname)
+    fname = '%s_%s_qc_t.gif' % (session_id, scan.id)
+    half_size = [ s/2 for s in im.size ]
+    put_image(im.resize(half_size), resource, fname)
+    return
+
+def create_from_dicom(scan):
+    tempdir = tempfile.mkdtemp()
+    try:
+        im = PIL.Image.open('test.png')
+    finally:
+        shutil.rmtree(tempdir)
+    return im
+
 progname = os.path.basename(sys.argv.pop(0))
 
 if not sys.argv:
     print
     print 'usage: %s <options>' % progname
     print
-    print 'options are:'
+    print 'original options are:'
     print
     print '    -session <MR-session label> (ignored)'
     print '    -project <project that the MR-session belongs to> (ignored)'
@@ -25,6 +64,11 @@ if not sys.argv:
     print '    -pwd <XNAT password>'
     print '    -raw <create QC files for raw scans only>'
     print
+    print 'new options are:'
+    print
+    print '    -scan <comma-separated list of scans> (may occur more than once)'
+    print '    -nooverwrite'
+    print
     sys.exit(1)
 
 session_id = None
@@ -32,6 +76,8 @@ base_uri = None
 username = None
 password = None
 raw_flag = False
+overwrite_flag = True
+scans = None
 
 while sys.argv:
     option = sys.argv.pop(0)
@@ -50,6 +96,12 @@ while sys.argv:
             password = sys.argv.pop(0)
         elif option == '-raw':
             raw_flag = True
+        elif option == '-nooverwrite':
+            overwrite_flag = False
+        elif option == '-scan':
+            if scans is None:
+                scans = set()
+            scans.update(sys.argv.pop(0).split(','))
         else:
             command_line_error('unknown option "%s"' % option)
             sys.exit(1)
@@ -76,8 +128,25 @@ if not password:
 connection = xnat.Connection(base_uri, username, password)
 
 e = connection.find_experiment(session_id)
-for scan in e.scans:
-    print scan
+for scan in e.scans.itervalues():
+    if scans is not None:
+        if scan.id not in scans:
+            print 'skipping', scan
+            continue
+        scans.remove(scan.id)
+    if not overwrite_flag:
+        if 'SNAPSHOTS' in scan.resources:
+            print 'SNAPSHOTS exists', scan
+            continue
+    print 'doing', scan
+    try:
+        create_snapshots(scan, session_id)
+    except:
+        print 'error', scan
+        traceback.print_exc()
+
+if scans is not None:
+    print 'remaining', scans
 
 connection.close()
 
