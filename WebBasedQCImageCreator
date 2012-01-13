@@ -15,12 +15,12 @@ def command_line_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
-def put_image(im, resource, fname):
+def put_image(im, resource, fname, content):
     if fname in resource.files:
         resource.files[fname].delete()
     buf = StringIO.StringIO()
     im.save(buf, format='GIF')
-    resource.create_file(buf.getvalue(), fname)
+    resource.create_file(buf.getvalue(), fname, format='GIF', content=content)
     buf.close()
     return
 
@@ -28,16 +28,16 @@ def create_snapshots(scan, session_id):
     if 'DICOM' in scan.resources:
         im = create_from_dicom(scan)
     else:
-        print 'no DICOM found', scan
+        raise ValueError('no DICOM found')
     try:
         resource = scan.resources['SNAPSHOTS']
     except KeyError:
         resource = scan.create_resource('SNAPSHOTS')
     fname = '%s_%s_qc.gif' % (session_id, scan.id)
-    put_image(im, resource, fname)
+    put_image(im, resource, fname, 'ORIGINAL')
     fname = '%s_%s_qc_t.gif' % (session_id, scan.id)
     half_size = [ s/2 for s in im.size ]
-    put_image(im.resize(half_size), resource, fname)
+    put_image(im.resize(half_size), resource, fname, 'THUMBNAIL')
     return
 
 def create_from_dicom(scan):
