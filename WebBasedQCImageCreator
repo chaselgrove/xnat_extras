@@ -6,59 +6,152 @@ import traceback
 import shutil
 import tempfile
 import StringIO
+import numpy
 import PIL.Image
 import dicom
 import xnat
+
+class Scan:
+
+    def __repr__(self):
+        return '<Scan %s>' % self.id
+
+    def remove_copies(self):
+        if self.copy_dir:
+            shutil.rmtree(self.copy_dir)
+            self.copy_dir = None
+        return
+
+    def save_image(self, im):
+        fname = '%s_%s_qc.gif' % (self.session_id, self.id)
+        self.save_single_image(im, 'SNAPSHOTS', fname, 'ORIGINAL')
+        fname = '%s_%s_qc_t.gif' % (self.session_id, self.id)
+        half_size = [ s/2 for s in im.size ]
+        im2 = im.resize(half_size)
+        self.save_single_image(im2, 'SNAPSHOTS', fname, 'THUMBNAIL')
+        return
+
+    def files(self, resource):
+        if self.copy_dir is None:
+            self.copy_resource(resource)
+        resource_dir = '%s/%s' % (self.copy_dir, resource)
+        if not os.path.exists(resource_dir):
+            self.copy_resource(resource)
+        for fname in os.listdir(resource_dir):
+            yield '%s/%s' % (resource_dir, fname)
+        return
+
+class DirScan(Scan):
+
+    def __init__(self, session_id, dir):
+        self.session_id = session_id
+        self.dir = dir
+        self.id = os.path.basename(dir)
+        self.resources = os.listdir(dir)
+        self.copy_dir = None
+        return
+
+    def copy_resource(self, resource):
+        if resource not in self.resources:
+            raise ValueError('no resource %s' % resource)
+        if not self.copy_dir:
+            self.copy_dir = tempfile.mkdtemp()
+        copy_dir = '%s/%s' % (self.copy_dir, resource)
+        if os.path.exists(copy_dir):
+            return
+        shutil.copytree('%s/%s' % (self.dir, resource), copy_dir)
+        return
+
+    def save_single_image(self, im, resource, fname, content):
+        resource_dir = '%s/%s' % (self.dir, resource)
+        if not os.path.exists(resource_dir):
+            os.mkdir(resource_dir)
+        fo = open('%s/%s' % (resource_dir, fname), 'w')
+        im.save(fo, format='GIF')
+        fo.close()
+        return
+
+class XNATScan(Scan):
+
+    def __init__(self, session_id, xnat_scan):
+        self.session_id = session_id
+        self.xnat_scan = xnat_scan
+        self.id = self.xnat_scan.id
+        self.resources = self.xnat_scan.resources
+        return
+
+    def save_single_image(self, im, resource, fname, content):
+        xnat_resource = self.xnat_scan.resources[resource]
+        if fname in xnat_resource.files:
+            xnat_resource.files[fname].delete()
+        buf = StringIO.StringIO()
+        im.save(buf, format='GIF')
+        xnat_resource.create_file(buf.getvalue(), 
+                                  fname, 
+                                  format='GIF', 
+                                  content=content)
+        buf.close()
+        return
 
 def command_line_error(msg):
     sys.stderr.write('%s: %s\n' % (progname, msg))
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
-def put_image(im, resource, fname, content):
-    if fname in resource.files:
-        resource.files[fname].delete()
-    buf = StringIO.StringIO()
-    im.save(buf, format='GIF')
-    resource.create_file(buf.getvalue(), fname, format='GIF', content=content)
-    buf.close()
-    return
-
-def create_snapshots(scan, session_id):
-    if 'DICOM' in scan.resources:
-        im = create_from_dicom(scan)
-    if 'secondary' in scan.resources:
-        im = create_from_secondary(scan)
-    else:
-        raise ValueError('no handlers found')
-    try:
-        resource = scan.resources['SNAPSHOTS']
-    except KeyError:
-        resource = scan.create_resource('SNAPSHOTS')
-    fname = '%s_%s_qc.gif' % (session_id, scan.id)
-    put_image(im, resource, fname, 'ORIGINAL')
-    fname = '%s_%s_qc_t.gif' % (session_id, scan.id)
-    half_size = [ s/2 for s in im.size ]
-    put_image(im.resize(half_size), resource, fname, 'THUMBNAIL')
-    return
-
-def create_from_dicom(scan):
-    tempdir = tempfile.mkdtemp()
-    try:
-        im = PIL.Image.open('test.png')
-    finally:
-        shutil.rmtree(tempdir)
+def gen_dicom_generic(scan):
+    if 'DICOM' not in scan.resources:
+        return None
+    files = []
+    for fname in scan.files('DICOM'):
+        try:
+            do = dicom.read_file(fname)
+            files.append((do.InstanceNumber, fname))
+        except:
+            pass
+    if not files:
+        return None
+    files.sort(lambda a, b: cmp(a[0], b[0]))
+    print scan.id, do.Columns, do.Rows, len(files), do.SeriesDescription
+    data = numpy.zeros((n_images, do.Columns, do.Rows), dtype=numpy.float32)
+    for y in range(n_y):
+        for x in range(n_x):
+            index = x + n_x*y
+            if index >= len(files):
+                continue
+            do = dicom.read_file(files[index*len(files)/n_images][1])
+            data[index,:,:] = do.pixel_array
+    data = data / data.max() * 255.0
+    data = data.astype(numpy.uint8)
+    scale_x = float(im_x)/do.Columns
+    scale_y = float(im_y)/do.Rows
+    scale = min((scale_x, scale_y))
+    if scale > 1.0:
+        scale = 1.0
+    part_x = int(round(scale * do.Columns))
+    part_y = int(round(scale * do.Rows))
+    full_x = n_x * part_x
+    full_y = n_y * part_y
+    im = PIL.Image.new('L', (full_x, full_y), 0x00)
+    for y in range(n_y):
+        for x in range(n_x):
+            index = x + n_x*y
+            im_part = PIL.Image.fromstring('L', (do.Columns, do.Rows), data[index,:,:].tostring())
+            im.paste(im_part.resize((part_x, part_y)), (x*part_x, y*part_y, (x+1)*part_x, (y+1)*part_y))
     return im
 
-def create_from_secondary(scan):
-    tempdir = tempfile.mkdtemp()
-    try:
-        raise NotImplementedError
-    finally:
-        shutil.rmtree(tempdir)
-    return im
+generators = [gen_dicom_generic]
 
 progname = os.path.basename(sys.argv.pop(0))
+
+n_x = 5
+n_y = 5
+
+size_x = 700
+size_y = 700
+
+n_images = n_x * n_y
+im_x = size_x / n_x
+im_y = size_y / n_y
 
 if not sys.argv:
     print
@@ -78,6 +171,7 @@ if not sys.argv:
     print
     print '    -scan <comma-separated list of scans> (may occur more than once)'
     print '    -nooverwrite'
+    print '    -test <directory>'
     print
     sys.exit(1)
 
@@ -86,7 +180,8 @@ base_uri = None
 username = None
 password = None
 overwrite_flag = True
-scans = None
+target_scans = None
+test_dir = None
 
 while sys.argv:
     option = sys.argv.pop(0)
@@ -108,9 +203,11 @@ while sys.argv:
         elif option == '-nooverwrite':
             overwrite_flag = False
         elif option == '-scan':
-            if scans is None:
-                scans = set()
-            scans.update(sys.argv.pop(0).split(','))
+            if target_scans is None:
+                target_scans = set()
+            target_scans.update(sys.argv.pop(0).split(','))
+        elif option == '-test':
+            test_dir = sys.argv.pop(0)
         else:
             command_line_error('unknown option "%s"' % option)
             sys.exit(1)
@@ -118,46 +215,63 @@ while sys.argv:
         command_line_error('missing argument to %s' % option)
         sys.exit(1)
 
-if not session_id:
-    command_line_error('no session label or session ID given')
-    sys.exit(1)
+if test_dir is not None:
+    print 'entering test mode'
+    session_id = 'CS_E007'
+    scans = []
+    for subdir in os.listdir(test_dir):
+        scans.append(DirScan(session_id, '%s/%s' % (test_dir, subdir)))
+else:
+    if not session_id:
+        command_line_error('no session ID given')
+        sys.exit(1)
+    if not base_uri:
+        command_line_error('no XNAT URI given')
+        sys.exit(1)
+    if not username:
+        command_line_error('no username given')
+        sys.exit(1)
+    if not password:
+        command_line_error('no password given')
+        sys.exit(1)
+    connection = xnat.Connection(base_uri, username, password)
+    e = connection.find_experiment(session_id)
+    scans = [ XNATScan(session_id, s) for s in e.scans.itervalues() ]
 
-if not base_uri:
-    command_line_error('no XNAT URI given')
-    sys.exit(1)
-
-if not username:
-    command_line_error('no username given')
-    sys.exit(1)
-
-if not password:
-    command_line_error('no password given')
-    sys.exit(1)
-
-connection = xnat.Connection(base_uri, username, password)
-
-e = connection.find_experiment(session_id)
-for scan in e.scans.itervalues():
-    if scans is not None:
-        if scan.id not in scans:
+for scan in scans:
+    if target_scans is not None:
+        if scan.id not in target_scans:
             print 'skipping', scan
             continue
-        scans.remove(scan.id)
+        target_scans.remove(scan.id)
     if not overwrite_flag:
         if 'SNAPSHOTS' in scan.resources:
             print 'SNAPSHOTS exists', scan
             continue
     print 'doing', scan
-    try:
-        create_snapshots(scan, session_id)
-    except:
-        print 'error', scan
-        traceback.print_exc()
+    im = None
+    for f in generators:
+        try:
+            im = f(scan)
+        except KeyboardInterrupt:
+            scan.remove_copies()
+            raise
+        except:
+            print 'error', scan, f
+            traceback.print_exc()
+        if im:
+            break
+    if not im:
+        print 'no generator happy with', scan
+    else:
+        scan.save_image(im)
+    scan.remove_copies()
 
-if scans is not None:
-    print 'remaining', scans
+if target_scans is not None:
+    print 'remaining', target_scans
 
-connection.close()
+if test_dir is None:
+    connection.close()
 
 sys.exit(0)
 
