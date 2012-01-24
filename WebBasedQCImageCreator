@@ -244,8 +244,12 @@ def gen_dicom_generic(scan):
         raise GeneratorError('no DICOM files found')
     files.sort(lambda a, b: cmp(a[0], b[0]))
     ti = TiledImage()
-    for index in xrange(len(ti)):
-        do = dicom.read_file(files[index*len(files)/len(ti)][1])
+    if len(files) <= len(ti):
+        slices = range(len(files))
+    else:
+        slices = [ i*len(files)/len(ti) for i in range(len(ti)) ]
+    for (index, slice) in enumerate(slices):
+        do = dicom.read_file(files[slice][1])
         data = do.pixel_array.astype('int32')
         im = PIL.Image.fromstring('I', (do.Columns, do.Rows), data)
         ti.add_frame(index, im)
@@ -269,8 +273,12 @@ def gen_dicom_rgb(scan):
         raise GeneratorError('no DICOM files found')
     files.sort(lambda a, b: cmp(a[0], b[0]))
     ti = TiledImage()
-    for index in xrange(len(ti)):
-        do = dicom.read_file(files[index*len(files)/len(ti)][1])
+    if len(files) <= len(ti):
+        slices = range(len(files))
+    else:
+        slices = [ i*len(files)/len(ti) for i in range(len(ti)) ]
+    for (index, slice) in enumerate(slices):
+        do = dicom.read_file(files[slice][1])
         im = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
         ti.add_frame(index, im)
     return ti.generate()
