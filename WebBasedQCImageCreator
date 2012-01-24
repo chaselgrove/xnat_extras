@@ -235,6 +235,8 @@ def gen_dicom_generic(scan):
         try:
             do = dicom.read_file(fname)
             files.append((do.InstanceNumber, fname))
+        except GeneratorError:
+            raise
         except:
             pass
     if not files:
