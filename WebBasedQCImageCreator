@@ -9,6 +9,7 @@ import StringIO
 import numpy
 import PIL.Image
 import dicom
+import nibabel
 import xnat
 
 class GeneratorError(Exception):
@@ -274,7 +275,37 @@ def gen_dicom_rgb(scan):
         ti.add_frame(index, im)
     return ti.generate()
 
-generators = [gen_dicom_rgb, gen_dicom_generic]
+def gen_nifti_generic(scan):
+    if 'NIfTI' not in scan.resources:
+        raise GeneratorError('no NIfTI resource')
+    vol = None
+    for fname in scan.files('NIfTI'):
+        try:
+            vol = nibabel.load(fname)
+        except GeneratorError:
+            raise
+        except:
+            pass
+        if vol:
+            break
+    if not vol:
+        raise GeneratorError('no NIfTI files found')
+    if len(vol.shape) != 3:
+        raise GeneratorError('non-3D NIfTI not supported')
+    if vol.get_data_dtype() != 'int16':
+        raise GeneratorError('non-int16 NIfTI not supported')
+    ti = TiledImage()
+    if vol.shape[2] <= len(ti):
+        slices = range(vol.shape[2])
+    else:
+        slices = [ i*vol.shape[2]/len(ti) for i in range(len(ti)) ]
+    for (index, slice) in enumerate(slices):
+        slice_data = vol.get_data()[:,:,slice].astype('int32')
+        im = PIL.Image.fromstring('I', vol.shape[:2], slice_data)
+        ti.add_frame(index, im)
+    return ti.generate()
+
+generators = [gen_dicom_rgb, gen_dicom_generic, gen_nifti_generic]
 
 progname = os.path.basename(sys.argv.pop(0))
 
