@@ -139,7 +139,7 @@ class TiledImage:
     tile_rows = 5
 
     # may actually be smaller if the passed frames are smaller
-    target_frame_side = 140
+    target_frame_side = 280
 
     def __init__(self):
         # frames are addressed by frames[col][row]
