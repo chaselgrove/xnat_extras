@@ -111,7 +111,7 @@ def gen_dicom_generic(scan):
     if not files:
         return None
     files.sort(lambda a, b: cmp(a[0], b[0]))
-    print scan.id, do.Columns, do.Rows, len(files), do.SeriesDescription
+#    print scan.id, do.Columns, do.Rows, len(files), do.SeriesDescription
     data = numpy.zeros((n_images, do.Columns, do.Rows), dtype=numpy.float32)
     for y in range(n_y):
         for x in range(n_x):
@@ -139,7 +139,42 @@ def gen_dicom_generic(scan):
             im.paste(im_part.resize((part_x, part_y)), (x*part_x, y*part_y, (x+1)*part_x, (y+1)*part_y))
     return im
 
-generators = [gen_dicom_generic]
+def gen_dicom_rgb(scan):
+    if 'DICOM' not in scan.resources:
+        return None
+    files = []
+    for fname in scan.files('DICOM'):
+        try:
+            do = dicom.read_file(fname)
+            if do.PhotometricInterpretation != 'RGB':
+                return None
+            files.append((do.InstanceNumber, fname))
+        except:
+            pass
+    if not files:
+        return None
+    files.sort(lambda a, b: cmp(a[0], b[0]))
+    scale_x = float(im_x)/do.Columns
+    scale_y = float(im_y)/do.Rows
+    scale = min((scale_x, scale_y))
+    if scale > 1.0:
+        scale = 1.0
+    part_x = int(round(scale * do.Columns))
+    part_y = int(round(scale * do.Rows))
+    full_x = n_x * part_x
+    full_y = n_y * part_y
+    im = PIL.Image.new('RGB', (full_x, full_y), 0x00)
+    for y in range(n_y):
+        for x in range(n_x):
+            index = x + n_x*y
+            if index >= len(files):
+                continue
+            do = dicom.read_file(files[index*len(files)/n_images][1])
+            im_part = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
+            im.paste(im_part.resize((part_x, part_y)), (x*part_x, y*part_y, (x+1)*part_x, (y+1)*part_y))
+    return im
+
+generators = [gen_dicom_rgb, gen_dicom_generic]
 
 progname = os.path.basename(sys.argv.pop(0))
 
