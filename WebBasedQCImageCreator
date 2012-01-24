@@ -35,9 +35,9 @@ class Scan:
         return
 
     def save_image(self, im):
-        fname = '%s_%s_qc.gif' % (self.session_id, self.id)
+        fname = '%s_%s_qc.gif' % (self.session_label, self.id)
         self.save_single_image(im, 'SNAPSHOTS', fname, 'ORIGINAL')
-        fname = '%s_%s_qc_t.gif' % (self.session_id, self.id)
+        fname = '%s_%s_qc_t.gif' % (self.session_label, self.id)
         half_size = [ s/2 for s in im.size ]
         im2 = im.resize(half_size)
         self.save_single_image(im2, 'SNAPSHOTS', fname, 'THUMBNAIL')
@@ -55,8 +55,8 @@ class Scan:
 
 class DirScan(Scan):
 
-    def __init__(self, session_id, dir):
-        self.session_id = session_id
+    def __init__(self, session_label, dir):
+        self.session_label = session_label
         self.dir = dir
         self.id = os.path.basename(dir)
         self.resources = os.listdir(dir)
@@ -85,11 +85,27 @@ class DirScan(Scan):
 
 class XNATScan(Scan):
 
-    def __init__(self, session_id, xnat_scan):
-        self.session_id = session_id
+    def __init__(self, session_label, xnat_scan):
+        self.session_label = session_label
         self.xnat_scan = xnat_scan
         self.id = self.xnat_scan.id
         self.resources = self.xnat_scan.resources
+        self.copy_dir = None
+        return
+
+    def copy_resource(self, resource):
+        if resource not in self.resources:
+            raise ValueError('no resource %s' % resource)
+        if not self.copy_dir:
+            self.copy_dir = tempfile.mkdtemp()
+        copy_dir = '%s/%s' % (self.copy_dir, resource)
+        if os.path.exists(copy_dir):
+            return
+        os.mkdir(copy_dir)
+        for file in self.resources[resource].files.itervalues():
+            local_fname = '%s/%s' % (copy_dir, os.path.basename(file.path))
+            print file, local_fname
+            file.get(local_fname)
         return
 
     def save_single_image(self, im, resource, fname, content):
@@ -323,8 +339,8 @@ if not sys.argv:
     print
     print 'original options are:'
     print
-    print '    -session <MR-session label> (ignored)'
     print '    -project <project that the MR-session belongs to> (ignored)'
+    print '    -session <MR-session label>'
     print '    -xnatId <MR-session ID>'
     print '    -host <XNAT base URI>'
     print '    -u <XNAT username>'
@@ -340,6 +356,7 @@ if not sys.argv:
     sys.exit(1)
 
 session_id = None
+session_label = None
 base_uri = None
 username = None
 password = None
@@ -350,10 +367,10 @@ test_dir = None
 while sys.argv:
     option = sys.argv.pop(0)
     try:
-        if option == '-session':
-            sys.argv.pop(0)
-        elif option == '-xnatId':
+        if option == '-xnatId':
             session_id = sys.argv.pop(0)
+        elif option == '-session':
+            session_label = sys.argv.pop(0)
         elif option == '-project':
             sys.argv.pop(0)
         elif option == '-host':
@@ -381,13 +398,16 @@ while sys.argv:
 
 if test_dir is not None:
     print 'entering test mode'
-    session_id = 'CS_E007'
+    session_label = 'test-session'
     scans = []
     for subdir in os.listdir(test_dir):
-        scans.append(DirScan(session_id, '%s/%s' % (test_dir, subdir)))
+        scans.append(DirScan(session_label, '%s/%s' % (test_dir, subdir)))
 else:
     if not session_id:
         command_line_error('no session ID given')
+        sys.exit(1)
+    if not session_label:
+        command_line_error('no session label given')
         sys.exit(1)
     if not base_uri:
         command_line_error('no XNAT URI given')
@@ -400,7 +420,7 @@ else:
         sys.exit(1)
     connection = xnat.Connection(base_uri, username, password)
     e = connection.find_experiment(session_id)
-    scans = [ XNATScan(session_id, s) for s in e.scans.itervalues() ]
+    scans = [ XNATScan(session_label, s) for s in e.scans.itervalues() ]
 
 for scan in scans:
     if target_scans is not None:
