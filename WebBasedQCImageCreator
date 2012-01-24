@@ -11,6 +11,17 @@ import PIL.Image
 import dicom
 import xnat
 
+class GeneratorError(Exception):
+
+    "exception for generators rejecting scans"
+
+    def __init__(self, reason):
+        self.reason = reason
+        return
+
+    def __str__(self):
+        return self.reason
+
 class Scan:
 
     def __repr__(self):
@@ -93,6 +104,124 @@ class XNATScan(Scan):
         buf.close()
         return
 
+class TiledImage:
+
+    """Tiled image generator
+
+    usage:
+
+    ti = TiledImage()
+    ti.add_frame(0, 0, im) # im is a PIL.Image.Image instance)
+    ti.add_frame(1, 0, im) # im.mode and im.shape is checked against the first
+    ...
+    ti.add_frame(n_x-1, n_y-1, im)
+    im = ti.generate() # generates a PIL.Image.Image
+    """
+
+    tile_cols = 5
+    tile_rows = 5
+
+    # may actually be smaller if the passed frames are smaller
+    target_frame_side = 140
+
+    def __init__(self):
+        # frames are addressed by frames[col][row]
+        self.frames = []
+        for c in range(self.tile_cols):
+            self.frames.append(self.tile_rows * [None])
+        self.ref_image = None
+        return
+
+    def __len__(self):
+        "total number of frames"
+        return self.tile_cols * self.tile_rows
+
+    def add_frame(self, spec, im):
+        if isinstance(spec, tuple):
+            (col, row) = spec
+        elif isinstance(spec, int):
+            col = spec % self.tile_cols
+            row = (spec-col) / self.tile_rows
+        else:
+            raise TypeError, 'spec must be a (col, row) tuple or an integer'
+        if col < 0 or col >= self.tile_cols:
+            raise IndexError, 'col out of range'
+        if row < 0 or row >= self.tile_rows:
+            raise IndexError, 'row out of range'
+        if self.ref_image:
+            if self.frames[col][row]:
+                raise ValueError, 'image already set for (%d, %d)' % (col, row)
+            if im.mode != self.ref_image.mode:
+                raise ValueError, 'mode mismatch (%s, expecting %s)' % (im.mode, self.ref_image.mode)
+            if im.size != self.ref_image.size:
+                raise ValueError, 'size mismatch (%s, expecting %s)' % (str(im.size), str(self.ref_image.size))
+        else:
+            self.ref_image = im
+        self.frames[col][row] = im
+        return
+
+    def generate(self):
+        if not self.ref_image:
+            raise ValueError, 'no images given'
+        for row in range(self.tile_rows):
+            for col in range(self.tile_cols):
+                if not self.frames[col][row]:
+                    im = PIL.Image.new(self.ref_image.mode, 
+                                       self.ref_image.size, 
+                                       0x00)
+                    self.frames[col][row] = im
+        if self.ref_image.mode == 'RGB':
+            return self._generate_rgb()
+        elif self.ref_image.mode == 'I':
+            return self._generate_grayscale()
+        raise ValueError, 'unsupported image mode "%s"' % self.ref_image.mode
+
+    def _generate_grayscale(self):
+        max_vals = []
+        for row in range(self.tile_rows):
+            for col in range(self.tile_cols):
+                max_vals.append(self.frames[col][row].getextrema()[1])
+        max_val = max(max_vals)
+        scale = float(255) / max_val
+        native_frame_side = max(self.ref_image.size)
+        frame_side = min((native_frame_side, self.target_frame_side))
+        im_size = (self.tile_cols * frame_side, self.tile_rows * frame_side)
+        im = PIL.Image.new('L', im_size, 0x00)
+        for row in range(self.tile_rows):
+            for col in range(self.tile_cols):
+                square = self._square(self.frames[col][row])
+                square = square.point(lambda i: i * scale, 'L')
+                bbox = (col*frame_side, 
+                        row*frame_side, 
+                        (col+1)*frame_side, 
+                        (row+1)*frame_side)
+                im.paste(square.resize((frame_side, frame_side)), bbox)
+        return im
+
+    def _generate_rgb(self):
+        native_frame_side = max(self.ref_image.size)
+        frame_side = min((native_frame_side, self.target_frame_side))
+        im_size = (self.tile_cols * frame_side, self.tile_rows * frame_side)
+        im = PIL.Image.new(self.ref_image.mode, im_size, 0x00)
+        for row in range(self.tile_rows):
+            for col in range(self.tile_cols):
+                square = self._square(self.frames[col][row])
+                bbox = (col*frame_side, 
+                        row*frame_side, 
+                        (col+1)*frame_side, 
+                        (row+1)*frame_side)
+                im.paste(square.resize((frame_side, frame_side)), bbox)
+        return im
+
+    def _square(self, im):
+        "pad a frame with black to return a square image"
+        side = max(im.size)
+        left = (side - im.size[0]) / 2
+        top = (side - im.size[1]) / 2
+        square_im = PIL.Image.new(im.mode, (side, side), 0x00)
+        square_im.paste(im, (left, top, left+im.size[0], top+im.size[1]))
+        return square_im
+
 def command_line_error(msg):
     sys.stderr.write('%s: %s\n' % (progname, msg))
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
@@ -100,7 +229,7 @@ def command_line_error(msg):
 
 def gen_dicom_generic(scan):
     if 'DICOM' not in scan.resources:
-        return None
+        raise GeneratorError('no DICOM resource')
     files = []
     for fname in scan.files('DICOM'):
         try:
@@ -109,84 +238,43 @@ def gen_dicom_generic(scan):
         except:
             pass
     if not files:
-        return None
+        raise GeneratorError('no DICOM files found')
     files.sort(lambda a, b: cmp(a[0], b[0]))
-#    print scan.id, do.Columns, do.Rows, len(files), do.SeriesDescription
-    data = numpy.zeros((n_images, do.Columns, do.Rows), dtype=numpy.float32)
-    for y in range(n_y):
-        for x in range(n_x):
-            index = x + n_x*y
-            if index >= len(files):
-                continue
-            do = dicom.read_file(files[index*len(files)/n_images][1])
-            data[index,:,:] = do.pixel_array
-    data = data / data.max() * 255.0
-    data = data.astype(numpy.uint8)
-    scale_x = float(im_x)/do.Columns
-    scale_y = float(im_y)/do.Rows
-    scale = min((scale_x, scale_y))
-    if scale > 1.0:
-        scale = 1.0
-    part_x = int(round(scale * do.Columns))
-    part_y = int(round(scale * do.Rows))
-    full_x = n_x * part_x
-    full_y = n_y * part_y
-    im = PIL.Image.new('L', (full_x, full_y), 0x00)
-    for y in range(n_y):
-        for x in range(n_x):
-            index = x + n_x*y
-            im_part = PIL.Image.fromstring('L', (do.Columns, do.Rows), data[index,:,:].tostring())
-            im.paste(im_part.resize((part_x, part_y)), (x*part_x, y*part_y, (x+1)*part_x, (y+1)*part_y))
-    return im
+    ti = TiledImage()
+    for index in xrange(len(ti)):
+        do = dicom.read_file(files[index*len(files)/len(ti)][1])
+        data = do.pixel_array.astype('int32')
+        im = PIL.Image.fromstring('I', (do.Columns, do.Rows), data)
+        ti.add_frame(index, im)
+    return ti.generate()
 
 def gen_dicom_rgb(scan):
     if 'DICOM' not in scan.resources:
-        return None
+        raise GeneratorError('no DICOM resource')
     files = []
     for fname in scan.files('DICOM'):
         try:
             do = dicom.read_file(fname)
             if do.PhotometricInterpretation != 'RGB':
-                return None
+                raise GeneratorError('not RGB')
             files.append((do.InstanceNumber, fname))
+        except GeneratorError:
+            raise
         except:
             pass
     if not files:
-        return None
+        raise GeneratorError('no DICOM files found')
     files.sort(lambda a, b: cmp(a[0], b[0]))
-    scale_x = float(im_x)/do.Columns
-    scale_y = float(im_y)/do.Rows
-    scale = min((scale_x, scale_y))
-    if scale > 1.0:
-        scale = 1.0
-    part_x = int(round(scale * do.Columns))
-    part_y = int(round(scale * do.Rows))
-    full_x = n_x * part_x
-    full_y = n_y * part_y
-    im = PIL.Image.new('RGB', (full_x, full_y), 0x00)
-    for y in range(n_y):
-        for x in range(n_x):
-            index = x + n_x*y
-            if index >= len(files):
-                continue
-            do = dicom.read_file(files[index*len(files)/n_images][1])
-            im_part = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
-            im.paste(im_part.resize((part_x, part_y)), (x*part_x, y*part_y, (x+1)*part_x, (y+1)*part_y))
-    return im
+    ti = TiledImage()
+    for index in xrange(len(ti)):
+        do = dicom.read_file(files[index*len(files)/len(ti)][1])
+        im = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
+        ti.add_frame(index, im)
+    return ti.generate()
 
 generators = [gen_dicom_rgb, gen_dicom_generic]
 
 progname = os.path.basename(sys.argv.pop(0))
-
-n_x = 5
-n_y = 5
-
-size_x = 700
-size_y = 700
-
-n_images = n_x * n_y
-im_x = size_x / n_x
-im_y = size_y / n_y
 
 if not sys.argv:
     print
@@ -276,31 +364,36 @@ else:
 for scan in scans:
     if target_scans is not None:
         if scan.id not in target_scans:
-            print 'skipping', scan
+            print '*', scan, '...skipping'
             continue
         target_scans.remove(scan.id)
+    print '*', scan
     if not overwrite_flag:
         if 'SNAPSHOTS' in scan.resources:
             print 'SNAPSHOTS exists', scan
             continue
-    print 'doing', scan
     im = None
-    for f in generators:
-        try:
-            im = f(scan)
-        except KeyboardInterrupt:
-            scan.remove_copies()
-            raise
-        except:
-            print 'error', scan, f
-            traceback.print_exc()
-        if im:
-            break
-    if not im:
-        print 'no generator happy with', scan
-    else:
-        scan.save_image(im)
-    scan.remove_copies()
+    try:
+        for f in generators:
+            try:
+                im = f(scan)
+            except GeneratorError, e:
+                print f, e.reason
+            except StandardError:
+                print f, 'error'
+                traceback.print_exc()
+            else:
+                if not im:
+                    print f, 'failed silently'
+            if im:
+                print f, 'success'
+                break
+        if not im:
+            print 'no generator happy with', scan
+        else:
+            scan.save_image(im)
+    finally:
+        scan.remove_copies()
 
 if target_scans is not None:
     print 'remaining', target_scans
