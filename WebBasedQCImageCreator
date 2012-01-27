@@ -109,7 +109,10 @@ class XNATScan(Scan):
         return
 
     def save_single_image(self, im, resource, fname, content):
-        xnat_resource = self.xnat_scan.resources[resource]
+        if resource in self.xnat_scan.resources:
+            xnat_resource = self.xnat_scan.resources[resource]
+        else:
+            xnat_resource = self.xnat_scan.create_resource(resource)
         if fname in xnat_resource.files:
             xnat_resource.files[fname].delete()
         buf = StringIO.StringIO()
