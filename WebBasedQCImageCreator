@@ -104,7 +104,6 @@ class XNATScan(Scan):
         os.mkdir(copy_dir)
         for file in self.resources[resource].files.itervalues():
             local_fname = '%s/%s' % (copy_dir, os.path.basename(file.path))
-            print file, local_fname
             file.get(local_fname)
         return
 
