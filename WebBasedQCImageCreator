@@ -282,6 +282,17 @@ def command_line_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
+def sample(n, total):
+    """sample(n, total)
+
+    return n equally spaced integers in the range 0...total-1
+
+    if n > total, return 0...total
+    """
+    if n > total:
+        return range(total)
+    return [ i*total/n for i in range(n) ]
+
 def gen_clear(scan):
     return PIL.Image.fromstring('L', (256, 256), 256*256*chr(128))
 
@@ -292,8 +303,34 @@ def gen_dicom_survey(scan):
         raise GeneratorError('no DICOM files found')
     if dicom.read_file(scan.dicom_files[0]).SeriesDescription != 'Survey':
         raise GeneratorError('series description is not "Survey"')
-    return
-    return gen_dicom_generic(scan)
+    # we expect ImageOrientationPatient to give us images normal to 
+    # primary axes
+    # we bail out if any image doesn't comply, and sort the images by the 
+    # index of the perpendicular axis
+    images_by_axis = {0: [], 1: [], 2: []}
+    for fname in scan.dicom_files:
+        do = dicom.read_file(fname)
+        axes = numpy.array(do.ImageOrientationPatient).reshape((2, 3))
+        normal = abs(numpy.cross(axes[0], axes[1]))
+        one_indices = numpy.where(normal == 1.0)[0]
+        if len(one_indices) != 1:
+            raise GeneratorError('oblique image found')
+        images_by_axis[one_indices[0]].append(do)
+    # calculate the number of images to the side of the tiled composite
+    # this will be the maximum number of images in a given direction or 5, 
+    # whichever is less
+    n_cols = max([ len(ims) for ims in images_by_axis.itervalues() ])
+    if n_cols > 5:
+        n_cols = 5
+    ti = TiledImage()
+    for axis in (0, 1, 2):
+        images = images_by_axis[axis]
+        for (tile_index, image_index) in enumerate(sample(n_cols, len(images))):
+            do = images[image_index]
+            data = do.pixel_array.astype('int32')
+            im = PIL.Image.fromstring('I', (do.Columns, do.Rows), data)
+            ti.add_frame((tile_index, axis), im)
+    return ti.generate()
 
 def gen_dicom_generic(scan):
     if 'DICOM' not in scan.resources:
