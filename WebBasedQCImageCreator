@@ -475,7 +475,9 @@ for scan in scans:
         scan.remove_copies()
 
 if target_scans is not None:
-    print 'remaining', target_scans
+    print 'the following requested scans were not found:'
+    for s in target_scans:
+        print '    %s' % s
 
 if test_dir is None:
     connection.close()
