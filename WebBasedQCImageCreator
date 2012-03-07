@@ -174,18 +174,22 @@ class TiledImage:
             col = spec % self.tile_cols
             row = (spec-col) / self.tile_rows
         else:
-            raise TypeError, 'spec must be a (col, row) tuple or an integer'
+            raise TypeError('spec must be a (col, row) tuple or an integer')
         if col < 0 or col >= self.tile_cols:
-            raise IndexError, 'col out of range'
+            raise IndexError('col out of range')
         if row < 0 or row >= self.tile_rows:
-            raise IndexError, 'row out of range'
+            raise IndexError('row out of range')
         if self.ref_image:
             if self.frames[col][row]:
-                raise ValueError, 'image already set for (%d, %d)' % (col, row)
+                raise ValueError('image already set for (%d, %d)' % (col, row))
             if im.mode != self.ref_image.mode:
-                raise ValueError, 'mode mismatch (%s, expecting %s)' % (im.mode, self.ref_image.mode)
+                msg = 'mode mismatch (%s, expecting %s)' \
+                      % (im.mode, self.ref_image.mode)
+                raise ValueError(msg)
             if im.size != self.ref_image.size:
-                raise ValueError, 'size mismatch (%s, expecting %s)' % (str(im.size), str(self.ref_image.size))
+                msg = 'size mismatch (%s, expecting %s)' \
+                      % (str(im.size), str(self.ref_image.size))
+                raise ValueError(msg)
         else:
             self.ref_image = im
         self.frames[col][row] = im
@@ -193,7 +197,7 @@ class TiledImage:
 
     def generate(self):
         if not self.ref_image:
-            raise ValueError, 'no images given'
+            raise ValueError('no images given')
         for row in range(self.tile_rows):
             for col in range(self.tile_cols):
                 if not self.frames[col][row]:
@@ -205,7 +209,7 @@ class TiledImage:
             return self._generate_rgb()
         elif self.ref_image.mode == 'I':
             return self._generate_grayscale()
-        raise ValueError, 'unsupported image mode "%s"' % self.ref_image.mode
+        raise ValueError('unsupported image mode "%s"' % self.ref_image.mode)
 
     def _generate_grayscale(self):
         max_vals = []
