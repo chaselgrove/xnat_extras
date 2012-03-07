@@ -69,7 +69,7 @@ class DirScan(Scan):
         if resource in self.resources:
             shutil.rmtree(resource_dir)
         os.mkdir(resource_dir)
-        self.resources = os.listdir(dir)
+        self.resources = os.listdir(self.dir)
         return
 
     def copy_resource(self, resource):
