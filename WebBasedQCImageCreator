@@ -161,11 +161,11 @@ class TiledImage:
 
     usage:
 
-    ti = TiledImage()
-    ti.add_frame(0, 0, im) # im is a PIL.Image.Image instance)
-    ti.add_frame(1, 0, im) # im.mode and im.shape is checked against the first
+    ti = TiledImage(n_cols, n_rows)
+    ti.add_frame((0, 0), im) # im is a PIL.Image.Image instance)
+    ti.add_frame((1, 0), im) # im.mode and im.shape is checked against the first
     ...
-    ti.add_frame(n_x-1, n_y-1, im)
+    ti.add_frame((n_x-1, n_y-1), im)
     im = ti.generate() # generates a PIL.Image.Image
     """
 
