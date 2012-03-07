@@ -169,13 +169,12 @@ class TiledImage:
     im = ti.generate() # generates a PIL.Image.Image
     """
 
-    tile_cols = 5
-    tile_rows = 5
-
     # may actually be smaller if the passed frames are smaller
     target_frame_side = 280
 
-    def __init__(self):
+    def __init__(self, n_cols, n_rows):
+        self.tile_cols = n_cols
+        self.tile_rows = n_rows
         # frames are addressed by frames[col][row]
         self.frames = []
         for c in range(self.tile_cols):
@@ -322,7 +321,7 @@ def gen_dicom_survey(scan):
     n_cols = max([ len(ims) for ims in images_by_axis.itervalues() ])
     if n_cols > 5:
         n_cols = 5
-    ti = TiledImage()
+    ti = TiledImage(5, 3)
     for axis in (0, 1, 2):
         images = images_by_axis[axis]
         for (tile_index, image_index) in enumerate(sample(n_cols, len(images))):
@@ -337,7 +336,7 @@ def gen_dicom_generic(scan):
         raise GeneratorError('no DICOM resource')
     if not scan.dicom_files:
         raise GeneratorError('no DICOM files found')
-    ti = TiledImage()
+    ti = TiledImage(5, 5)
     for (index, slice) in enumerate(sample(len(ti), len(scan.dicom_files))):
         do = dicom.read_file(scan.dicom_files[slice])
         data = do.pixel_array.astype('int32')
@@ -352,7 +351,7 @@ def gen_dicom_rgb(scan):
         raise GeneratorError('no DICOM files found')
     if dicom.read_file(scan.dicom_files[0]).PhotometricInterpretation != 'RGB':
         raise GeneratorError('not RGB')
-    ti = TiledImage()
+    ti = TiledImage(5, 5)
     for (index, slice) in enumerate(sample(len(ti), len(scan.dicom_files))):
         do = dicom.read_file(scan.dicom_files[slice])
         im = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
@@ -378,7 +377,7 @@ def gen_nifti_generic(scan):
         raise GeneratorError('non-3D NIfTI not supported')
     if vol.get_data_dtype() != 'int16':
         raise GeneratorError('non-int16 NIfTI not supported')
-    ti = TiledImage()
+    ti = TiledImage(5, 5)
     for (index, slice) in enumerate(sample(len(ti), vol.shape[2])):
         slice_data = vol.get_data()[:,:,slice].astype('int32')
         im = PIL.Image.fromstring('I', vol.shape[:2], slice_data)
