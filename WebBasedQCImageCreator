@@ -282,6 +282,9 @@ def command_line_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
+def gen_clear(scan):
+    return PIL.Image.fromstring('L', (256, 256), 256*256*chr(128))
+
 def gen_dicom_survey(scan):
     if 'DICOM' not in scan.resources:
         raise GeneratorError('no DICOM resource')
@@ -383,10 +386,13 @@ if not sys.argv:
     print '    -scan <comma-separated list of scans> (may occur more than once)'
     print '    -nooverwrite'
     print '    -test <directory>'
+    print '    -clear'
     print
     print 'existence and overwriting is done on a per-SNAPSHOTS resource basis '
     print '(so -nooverwrite will skip a scan if the resource exists, and '
     print 'overwriting will replace the whole resource)'
+    print
+    print '-clear will create a gray image (useful for testing)'
     print
     sys.exit(1)
 
@@ -418,6 +424,8 @@ while sys.argv:
             pass
         elif option == '-nooverwrite':
             overwrite_flag = False
+        elif option == '-clear':
+            generators = (gen_clear, )
         elif option == '-scan':
             if target_scans is None:
                 target_scans = set()
