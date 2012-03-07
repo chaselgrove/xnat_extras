@@ -35,6 +35,7 @@ class Scan:
         return
 
     def save_image(self, im):
+        self._reset_resource('SNAPSHOTS')
         fname = '%s_%s_qc.gif' % (self.session_label, self.id)
         self.save_single_image(im, 'SNAPSHOTS', fname, 'ORIGINAL')
         fname = '%s_%s_qc_t.gif' % (self.session_label, self.id)
@@ -63,6 +64,14 @@ class DirScan(Scan):
         self.copy_dir = None
         return
 
+    def _reset_resource(self, resource):
+        resource_dir = '%s/%s' % (self.dir, resource)
+        if resource in self.resources:
+            shutil.rmtree(resource_dir)
+        os.mkdir(resource_dir)
+        self.resources = os.listdir(dir)
+        return
+
     def copy_resource(self, resource):
         if resource not in self.resources:
             raise ValueError('no resource %s' % resource)
@@ -76,8 +85,6 @@ class DirScan(Scan):
 
     def save_single_image(self, im, resource, fname, content):
         resource_dir = '%s/%s' % (self.dir, resource)
-        if not os.path.exists(resource_dir):
-            os.mkdir(resource_dir)
         fo = open('%s/%s' % (resource_dir, fname), 'w')
         im.save(fo, format='GIF')
         fo.close()
@@ -91,6 +98,12 @@ class XNATScan(Scan):
         self.id = self.xnat_scan.id
         self.resources = self.xnat_scan.resources
         self.copy_dir = None
+        return
+
+    def _reset_resource(self, resource):
+        if resource in self.resources:
+            self.resources[resource].pyxnat_resource.delete()
+        self.xnat_scan.create_resource(resource)
         return
 
     def copy_resource(self, resource):
@@ -108,10 +121,9 @@ class XNATScan(Scan):
         return
 
     def save_single_image(self, im, resource, fname, content):
-        if resource in self.xnat_scan.resources:
-            xnat_resource = self.xnat_scan.resources[resource]
-        else:
-            xnat_resource = self.xnat_scan.create_resource(resource)
+        # resource should exist from Scan.save_image() calling 
+        # XNATScan._reset_resource()
+        xnat_resource = self.xnat_scan.resources[resource]
         if fname in xnat_resource.files:
             xnat_resource.files[fname].delete()
         buf = StringIO.StringIO()
@@ -354,6 +366,10 @@ if not sys.argv:
     print '    -scan <comma-separated list of scans> (may occur more than once)'
     print '    -nooverwrite'
     print '    -test <directory>'
+    print
+    print 'existence and overwriting is done on a per-SNAPSHOTS resource basis '
+    print '(so -nooverwrite will skip a scan if the resource exists, and '
+    print 'overwriting will replace the whole resource)'
     print
     sys.exit(1)
 
