@@ -501,7 +501,7 @@ for scan in scans:
     finally:
         scan.remove_copies()
 
-if target_scans is not None:
+if target_scans:
     print 'the following requested scans were not found:'
     for s in target_scans:
         print '    %s' % s
