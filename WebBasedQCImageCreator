@@ -484,15 +484,15 @@ for scan in scans:
             try:
                 im = f(scan)
             except GeneratorError, e:
-                print f, e.reason
+                print '%s(): %s' % (f.__name__, e.reason)
             except StandardError:
-                print f, 'error'
+                print '%s(): error' % f.__name__
                 traceback.print_exc()
             else:
                 if not im:
-                    print f, 'failed silently'
+                    print '%s(): failed silently' % f.__name__
             if im:
-                print f, 'success'
+                print '%s(): success' % f.__name__
                 break
         if not im:
             print 'no generator happy with', scan
