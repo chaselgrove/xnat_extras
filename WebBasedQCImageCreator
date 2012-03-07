@@ -338,11 +338,7 @@ def gen_dicom_generic(scan):
     if not scan.dicom_files:
         raise GeneratorError('no DICOM files found')
     ti = TiledImage()
-    if len(scan.dicom_files) <= len(ti):
-        slices = range(len(scan.dicom_files))
-    else:
-        slices = [ i*len(scan.dicom_files)/len(ti) for i in range(len(ti)) ]
-    for (index, slice) in enumerate(slices):
+    for (index, slice) in enumerate(sample(len(ti), len(scan.dicom_files))):
         do = dicom.read_file(scan.dicom_files[slice])
         data = do.pixel_array.astype('int32')
         im = PIL.Image.fromstring('I', (do.Columns, do.Rows), data)
@@ -357,11 +353,7 @@ def gen_dicom_rgb(scan):
     if dicom.read_file(scan.dicom_files[0]).PhotometricInterpretation != 'RGB':
         raise GeneratorError('not RGB')
     ti = TiledImage()
-    if len(files) <= len(ti):
-        slices = range(len(files))
-    else:
-        slices = [ i*len(files)/len(ti) for i in range(len(ti)) ]
-    for (index, slice) in enumerate(slices):
+    for (index, slice) in enumerate(sample(len(ti), len(scan.dicom_files))):
         do = dicom.read_file(scan.dicom_files[slice])
         im = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
         ti.add_frame(index, im)
@@ -387,11 +379,7 @@ def gen_nifti_generic(scan):
     if vol.get_data_dtype() != 'int16':
         raise GeneratorError('non-int16 NIfTI not supported')
     ti = TiledImage()
-    if vol.shape[2] <= len(ti):
-        slices = range(vol.shape[2])
-    else:
-        slices = [ i*vol.shape[2]/len(ti) for i in range(len(ti)) ]
-    for (index, slice) in enumerate(slices):
+    for (index, slice) in enumerate(sample(len(ti), vol.shape[2])):
         slice_data = vol.get_data()[:,:,slice].astype('int32')
         im = PIL.Image.fromstring('I', vol.shape[:2], slice_data)
         ti.add_frame(index, im)
