@@ -25,6 +25,24 @@ class GeneratorError(Exception):
 
 class Scan:
 
+    def __init__(self):
+        self._dicom_files = None
+        return
+
+    @property
+    def dicom_files(self):
+        if self._dicom_files is None:
+            files = []
+            for fname in self.files('DICOM'):
+                try:
+                    do = dicom.read_file(fname)
+                    files.append((do.InstanceNumber, fname))
+                except:
+                    pass
+            files.sort(lambda a, b: cmp(a[0], b[0]))
+            self._dicom_files = [ f[1] for f in files ]
+        return self._dicom_files
+
     def __repr__(self):
         return '<Scan %s>' % self.id
 
@@ -57,6 +75,7 @@ class Scan:
 class DirScan(Scan):
 
     def __init__(self, session_label, dir):
+        Scan.__init__(self)
         self.session_label = session_label
         self.dir = dir
         self.id = os.path.basename(dir)
@@ -93,6 +112,7 @@ class DirScan(Scan):
 class XNATScan(Scan):
 
     def __init__(self, session_label, xnat_scan):
+        Scan.__init__(self)
         self.session_label = session_label
         self.xnat_scan = xnat_scan
         self.id = self.xnat_scan.id
@@ -265,45 +285,25 @@ def command_line_error(msg):
 def gen_dicom_survey(scan):
     if 'DICOM' not in scan.resources:
         raise GeneratorError('no DICOM resource')
-    files = []
-    for fname in scan.files('DICOM'):
-        try:
-            do = dicom.read_file(fname)
-            files.append((do.InstanceNumber, fname))
-        except GeneratorError:
-            raise
-        except:
-            pass
-    if not files:
+    if not scan.dicom_files:
         raise GeneratorError('no DICOM files found')
-    do = dicom.read_file(files[0][1])
-    if do.SeriesDescription != 'Survey':
+    if dicom.read_file(scan.dicom_files[0]).SeriesDescription != 'Survey':
         raise GeneratorError('series description is not "Survey"')
-    gen_dicom_generic(scan)
     return
+    return gen_dicom_generic(scan)
 
 def gen_dicom_generic(scan):
     if 'DICOM' not in scan.resources:
         raise GeneratorError('no DICOM resource')
-    files = []
-    for fname in scan.files('DICOM'):
-        try:
-            do = dicom.read_file(fname)
-            files.append((do.InstanceNumber, fname))
-        except GeneratorError:
-            raise
-        except:
-            pass
-    if not files:
+    if not scan.dicom_files:
         raise GeneratorError('no DICOM files found')
-    files.sort(lambda a, b: cmp(a[0], b[0]))
     ti = TiledImage()
-    if len(files) <= len(ti):
-        slices = range(len(files))
+    if len(scan.dicom_files) <= len(ti):
+        slices = range(len(scan.dicom_files))
     else:
-        slices = [ i*len(files)/len(ti) for i in range(len(ti)) ]
+        slices = [ i*len(scan.dicom_files)/len(ti) for i in range(len(ti)) ]
     for (index, slice) in enumerate(slices):
-        do = dicom.read_file(files[slice][1])
+        do = dicom.read_file(scan.dicom_files[slice])
         data = do.pixel_array.astype('int32')
         im = PIL.Image.fromstring('I', (do.Columns, do.Rows), data)
         ti.add_frame(index, im)
@@ -312,27 +312,17 @@ def gen_dicom_generic(scan):
 def gen_dicom_rgb(scan):
     if 'DICOM' not in scan.resources:
         raise GeneratorError('no DICOM resource')
-    files = []
-    for fname in scan.files('DICOM'):
-        try:
-            do = dicom.read_file(fname)
-            if do.PhotometricInterpretation != 'RGB':
-                raise GeneratorError('not RGB')
-            files.append((do.InstanceNumber, fname))
-        except GeneratorError:
-            raise
-        except:
-            pass
-    if not files:
+    if not scan.dicom_files:
         raise GeneratorError('no DICOM files found')
-    files.sort(lambda a, b: cmp(a[0], b[0]))
+    if dicom.read_file(scan.dicom_files[0]).PhotometricInterpretation != 'RGB':
+        raise GeneratorError('not RGB')
     ti = TiledImage()
     if len(files) <= len(ti):
         slices = range(len(files))
     else:
         slices = [ i*len(files)/len(ti) for i in range(len(ti)) ]
     for (index, slice) in enumerate(slices):
-        do = dicom.read_file(files[slice][1])
+        do = dicom.read_file(scan.dicom_files[slice])
         im = PIL.Image.fromstring('RGB', (do.Columns, do.Rows), do.pixel_array)
         ti.add_frame(index, im)
     return ti.generate()
