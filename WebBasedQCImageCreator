@@ -262,6 +262,26 @@ def command_line_error(msg):
     sys.stderr.write('run %s with no arguments for usage\n' % progname)
     return
 
+def gen_dicom_survey(scan):
+    if 'DICOM' not in scan.resources:
+        raise GeneratorError('no DICOM resource')
+    files = []
+    for fname in scan.files('DICOM'):
+        try:
+            do = dicom.read_file(fname)
+            files.append((do.InstanceNumber, fname))
+        except GeneratorError:
+            raise
+        except:
+            pass
+    if not files:
+        raise GeneratorError('no DICOM files found')
+    do = dicom.read_file(files[0][1])
+    if do.SeriesDescription != 'Survey':
+        raise GeneratorError('series description is not "Survey"')
+    gen_dicom_generic(scan)
+    return
+
 def gen_dicom_generic(scan):
     if 'DICOM' not in scan.resources:
         raise GeneratorError('no DICOM resource')
@@ -347,7 +367,10 @@ def gen_nifti_generic(scan):
         ti.add_frame(index, im)
     return ti.generate()
 
-generators = [gen_dicom_rgb, gen_dicom_generic, gen_nifti_generic]
+generators = (gen_dicom_survey, 
+              gen_dicom_rgb, 
+              gen_dicom_generic, 
+              gen_nifti_generic)
 
 progname = os.path.basename(sys.argv.pop(0))
 
