@@ -511,8 +511,6 @@ elif command == 'push':
                     print 'not updating %s' % path
                 else:
                     print 'updating %s' % path
-                    f = resource.file(path)
-                    f.delete()
                     del rc_files[path]
             if statuses[path]['remote'] == 'M':
                 if not force_flag:
@@ -654,7 +652,6 @@ elif command == 'pull':
                     print 'not updating %s' % path
                 else:
                     print 'updating %s' % path
-                    os.unlink(path)
                     del rc_files[path]
             if statuses[path]['local'] == 'M':
                 if not force_flag:
