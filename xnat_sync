@@ -116,8 +116,7 @@ def display_experiment_resources(experiment, prefix=''):
     print '%s+ Experiment %s' % (prefix, experiment.label())
     display_resources(experiment.resources(), prefix)
     for scan in experiment.scans():
-        print '%s    + Scan %s' % (prefix, scan.id())
-        display_resources(scan.resources(), prefix + '    ')
+        display_scan_resources(scan, prefix + '    ')
     for reconstruction in experiment.reconstructions():
         print '%s    + Reconstruction %s' % (prefix, reconstruction.label())
         display_resources(reconstruction.in_resources(), prefix + '    ', 'In')
@@ -126,6 +125,11 @@ def display_experiment_resources(experiment, prefix=''):
         print '%s    + Assessment %s' % (prefix, assessor.label())
         display_resources(assessor.in_resources(), prefix + '    ', 'In')
         display_resources(assessor.out_resources(), prefix + '    ', 'Out')
+    return
+
+def display_scan_resources(scan, prefix=''):
+    print '%s+ Scan %s' % (prefix, scan.id())
+    display_resources(scan.resources(), prefix + '    ')
     return
 
 def display_resources(cobject, prefix, res_pre=None):
@@ -165,42 +169,49 @@ def get_object(i, argv):
     if not experiment.exists():
         sys.stderr.write("%s: can't find experiment %s for subject %s\n" % (progname, experiment_id, subject_id))
         return None
-    return experiment
+    if not sys.argv:
+        return experiment
+    scan_name = sys.argv.pop(0)
+    scan = experiment.scan(scan_name)
+    if not scan.exists():
+        sys.stderr.write("%s: can't find scan %s for experiment %s\n" % (progname, scan_name, experiment_id))
+        return None
+    return scan
 
-def find_resource(object, resource_id):
-    for r in object.resources():
-        if r.id() == resource_id:
-            return r
+def find_resources(object, resource_id):
+    resources = []
     if object._urt == 'projects':
         for subject in object.subjects():
-            r = find_resource(subject, resource_id)
-            if r:
-                return r
+            resources.extend(find_resources(subject, resource_id))
     elif object._urt == 'subjects':
         for experiment in object.experiments():
-            r = find_resource(experiment, resource_id)
-            if r:
-                return r
-    else:
+            resources.extend(find_resources(experiment, resource_id))
+    elif object._urt == 'experiments':
         for scan in object.scans():
-            for r in scan.resources():
-                if r.id() == resource_id:
-                    return r
+            resources.extend(find_resources(scan, resource_id))
         for assessor in object.assessors():
             for r in assessor.in_resources():
-                if r.id() == resource_id:
-                    return r
+                if r.id() == resource_id or r.label() == resource_id:
+                    resources.append(r)
             for r in assessor.out_resources():
-                if r.id() == resource_id:
-                    return r
+                if r.id() == resource_id or r.label() == resource_id:
+                    resources.append(r)
         for recon in object.reconstructions():
             for r in recon.in_resources():
-                if r.id() == resource_id:
-                    return r
+                if r.id() == resource_id or r.label() == resource_id:
+                    resources.append(r)
             for r in recon.out_resources():
-                if r.id() == resource_id:
-                    return r
-    return None
+                if r.id() == resource_id or r.label() == resource_id:
+                    resources.append(r)
+    elif object._urt == 'scans':
+        for r in object.resources():
+            if r.id() == resource_id or r.label() == resource_id:
+                resources.append(r)
+    else:
+        for r in object.resources():
+            if r.id() == resource_id or r.label() == resource_id:
+                resources.append(r)
+    return resources
 
 def display_parents(object, prefix=''):
     prefix = prefix + '    '
@@ -271,10 +282,10 @@ if not sys.argv:
     print
     print 'commands and arguments are:'
     print
-    print '    list <XNAT URI> <project> [subject [experiment]] -- list resources'
+    print '    list <XNAT URI> <project> [subject [experiment [scan]]] -- list resources'
     print '    init -c <XNAT URI> <resource URI> -- create and associate with a resource'
     print '    init <XNAT URI> <resource URI> -- associate with a resource'
-    print '    init <XNAT URI> <project> [subject [experiment]] <resource ID>'
+    print '    init <XNAT URI> <project> [subject [experiment [scan]]] <resource ID>'
     print '        -- associate with a resource'
     print '    status -- print file-by-file synchronization status'
     print '    info -- print information about the association'
@@ -401,8 +412,10 @@ if command == 'list':
         display_project_resources(object)
     elif object._urt == 'subjects':
         display_subject_resources(object)
-    else:
+    elif object._urt == 'experiments':
         display_experiment_resources(object)
+    else:
+        display_scan_resources(object)
 elif command == 'init':
     if os.path.exists('.xnat'):
         sys.stderr.write('%s: .xnat exists, already a sync dir\n' % progname)
@@ -437,10 +450,14 @@ elif command == 'init':
             resource_id = sys.argv.pop()
             object = get_object(i, sys.argv)
             print 'searching for resource...'
-            resource = find_resource(object, resource_id)
-            if not resource:
+            resources = find_resources(object, resource_id)
+            if not resources:
                 sys.stderr.write('%s: resource %s not found\n' % (progname, resource_id))
                 sys.exit(1)
+            if len(resources) > 1:
+                sys.stderr.write('%s: multiple resources %s found\n' % (progname, resource_id))
+                sys.exit(1)
+            resource = resources[0]
     files = {}
     if dry_run_flag:
         print 'not writing .xnat'
