@@ -97,16 +97,15 @@ out_fname = 'XDATScreen_report_%s.vm' % element_type.replace(':', '_')
 
 print 'writing to %s...' % out_fname
 
-fo = sys.stdout
-
-fo.write(head % (sys.argv[2], sys.argv[2]))
-
 if os.path.exists(out_fname):
     sys.stderr.write('%s: output file %s exists\n' % (progname, out_fname))
     sys.exit(1)
 
-cc_element = doc.getElementsByTagName('xs:complexContent')[0]
+fo = open(out_fname, 'w')
 
+fo.write(head % (sys.argv[2], sys.argv[2]))
+
+cc_element = doc.getElementsByTagName('xs:complexContent')[0]
 for el in cc_element.getElementsByTagName('xs:element'):
     description = text_value(el.getElementsByTagName('xs:documentation')[0])
     if el.getAttribute('type'):
