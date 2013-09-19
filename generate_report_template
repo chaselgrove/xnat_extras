@@ -1,0 +1,126 @@
+#!/usr/bin/python
+
+# Copyright (c) 2011 Christian Haselgrove
+# BSD License: http://www.opensource.org/licenses/bsd-license.php
+
+# generates an XNAT display document from a simple XSD
+
+import sys
+import os
+import xml.dom.minidom
+
+head = """<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2//EN">
+$page.setTitle("%s")
+$page.setLinkColor($ui.alink)
+$page.setVlinkColor($ui.vlink)
+#if ($turbineUtils.GetPassedParameter("popup", $data))
+    #set ($popup = $turbineUtils.GetPassedParameter("popup", data) )
+    #set ($popup = "false")
+#end
+
+<TABLE width="100%%">
+    <TR>
+        <TD>
+            <table width="100%%">
+                <TR>
+                    <TD align="left" valign="middle">
+                        <DIV class="edit_title">%s</DIV>
+                    </TD>
+                </TR>
+            </TABLE>
+        </TD>
+    </TR>
+    <TR>
+        <TD>
+            <TABLE width="100%%">
+                <TR>
+                    <TD valign="top">
+                        <TABLE>
+                            <TR>
+                                <TH width="50%%" align="left">Description</TH>
+                                <TH width="20%%" align="left">Value</TH>             
+                            </TR>
+                            <TR><TD colspan='3'><BR /></TD></TR>
+"""
+
+row = """                            <TR>
+                                <TH width="50%%" align="left">%s</TH>
+                                <TD width="20%%">%s</TD>
+                            </TR>
+"""
+
+tail = """                        </TABLE>
+                    </TD>
+                    <TD valign="top" align="right">
+                        #elementActionsBox($element $search_field $search_value $data.getSession().getAttribute("user") $item)
+                    </TD>
+                </TR>
+            </TABLE>
+        </TD>
+    </TR>
+</TABLE><BR>#parse("/screens/ReportProjectSpecificFields.vm")
+"""
+
+def text_value(el):
+    s = ''
+    for cn in el.childNodes:
+        if cn.nodeType == cn.TEXT_NODE:
+            s += cn.data
+    return s
+
+progname = os.path.basename(sys.argv[0])
+
+if len(sys.argv) != 3:
+    print
+    print 'usage: %s <XSD> <title>' % progname
+    print
+    sys.exit(1)
+
+doc = xml.dom.minidom.parse(sys.argv[1])
+schema_element = doc.getElementsByTagName('xs:schema')[0]
+
+element_type = None
+
+for cn in schema_element.childNodes:
+    if cn.nodeType != cn.ELEMENT_NODE:
+        continue
+    if cn.tagName != 'xs:element':
+        continue
+    element_type = cn.getAttribute('type')
+    break
+
+if not element_type:
+    sys.stderr.write('%s: element type not found\n' % progname)
+    sys.exit(1)
+
+out_fname = 'XDATScreen_report_%s.vm' % element_type.replace(':', '_')
+
+print 'writing to %s...' % out_fname
+
+fo = sys.stdout
+
+fo.write(head % (sys.argv[2], sys.argv[2]))
+
+if os.path.exists(out_fname):
+    sys.stderr.write('%s: output file %s exists\n' % (progname, out_fname))
+    sys.exit(1)
+
+cc_element = doc.getElementsByTagName('xs:complexContent')[0]
+
+for el in cc_element.getElementsByTagName('xs:element'):
+    description = text_value(el.getElementsByTagName('xs:documentation')[0])
+    if el.getAttribute('type'):
+        selector = 'getIntegerProperty'
+    else:
+        selector = 'getStringProperty'
+    name = el.getAttribute('name')
+    value = '$!item.%s("%s/%s")' % (selector, element_type, name)
+    fo.write(row % (description, value))
+
+fo.write(tail)
+
+fo.close()
+
+sys.exit(0)
+
+# eof
